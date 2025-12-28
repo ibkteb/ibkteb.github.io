@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Hominid Brain Size Evolution</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #333333;
+            --border-color: #cccccc;
+            --accent-color: #2c3e50;
+            --map-land: #e0e0e0;
+            --map-ocean: #ffffff;
+            --map-stroke: #999999;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        header {
+            width: 100%;
+            max-width: 1400px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 2px solid var(--text-color);
+            padding-bottom: 10px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .citation {
+            font-size: 12px;
+            color: #666;
+        }
+
+        #controls {
+            width: 100%;
+            max-width: 1400px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 10px;
+            background: #f9f9f9;
+            border: 1px solid var(--border-color);
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        /* Language Button in Header */
+        #lang-btn {
+            background: none;
+            border: 1px solid #999;
+            color: #666;
+            padding: 4px 8px;
+            font-size: 11px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        #lang-btn:hover {
+            background: #eee;
+            color: #333;
+        }
+
+        button.control-btn {
+            padding: 6px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            background: white;
+            border: 1px solid var(--text-color);
+            border-radius: 2px;
+            transition: background 0.2s;
+        }
+
+        button.control-btn:hover {
+            background: #eee;
+        }
+
+        button.control-btn:active {
+            background: #ddd;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            flex-grow: 1;
+            gap: 15px;
+        }
+
+        input[type=range] {
+            flex-grow: 1;
+            cursor: pointer;
+            margin: 0 10px;
+        }
+
+        .value-display {
+            font-family: "Courier New", monospace;
+            font-weight: bold;
+            min-width: 100px;
+            /* Increased for longer JA strings */
+            text-align: right;
+        }
+
+        #main-view {
+            display: flex;
+            flex-direction: row;
+            width: 100%;
+            max-width: 1400px;
+            height: calc(100% - 140px);
+            gap: 20px;
+        }
+
+        #map-container {
+            flex: 2;
+            border: 1px solid var(--border-color);
+            position: relative;
+            background: var(--map-ocean);
+            overflow: hidden;
+        }
+
+        #graph-container {
+            flex: 1;
+            border: 1px solid var(--border-color);
+            position: relative;
+            background: white;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Tooltip */
+        #tooltip {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid #333;
+            padding: 8px;
+            font-size: 12px;
+            pointer-events: none;
+            box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+            display: none;
+            z-index: 100;
+        }
+
+        .tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .tooltip-label {
+            font-weight: bold;
+            color: #666;
+        }
+
+        /* D3 Styles */
+        .graticule {
+            fill: none;
+            stroke: #ccc;
+            stroke-width: 0.5px;
+            stroke-opacity: 0.5;
+        }
+
+        .country {
+            fill: var(--map-land);
+            stroke: var(--map-stroke);
+            stroke-width: 0.5px;
+        }
+
+        .data-point {
+            cursor: pointer;
+            transition: r 0.2s, stroke-width 0.2s;
+        }
+
+        .data-point:hover {
+            stroke: #000;
+        }
+
+        .highlighted-point {
+            stroke: #d00 !important;
+            fill: #ff0000 !important;
+            fill-opacity: 1 !important;
+        }
+
+        .active-dot {
+            cursor: pointer;
+        }
+
+        .active-dot:hover {
+            stroke: #000;
+            stroke-width: 2px;
+        }
+
+        .active-dot.selected {
+            stroke: #d00;
+            stroke-width: 2px;
+            fill: #d00;
+        }
+
+        .axis-label {
+            font-size: 12px;
+            font-style: italic;
+        }
+
+        .axis line,
+        .axis path {
+            stroke: #333;
+        }
+
+        .axis text {
+            fill: #333;
+            font-family: sans-serif;
+            font-size: 10px;
+        }
+
+        .timewindow-line {
+            stroke: #d00;
+            stroke-width: 1.5px;
+            stroke-dasharray: 4 2;
+        }
+
+        /* Guide Lines for Graph Cursor */
+        .guide-line {
+            stroke: #999;
+            stroke-width: 1px;
+            stroke-dasharray: 4 4;
+            pointer-events: none;
+            /* Ignore mouse events so they pass through */
+            display: none;
+        }
+
+        .legend-container {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border: 1px solid #ccc;
+            font-size: 11px;
+            pointer-events: none;
+        }
+
+        .toggle-label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            user-select: none;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div>
+            <h1 id="title-text">Hominid Brain Size Evolution</h1>
+            <div class="citation" id="citation-text">Data source: brain-size-list_2.csv | Visualization: D3.js v7</div>
+        </div>
+        <div style="text-align: right; font-size: 12px;">
+            <span id="stats-display">Loaded 0 specimens</span>
+            <button id="lang-btn">EN/JA</button>
+        </div>
+    </header>
+
+    <div id="controls">
+        <button id="play-pause-btn" class="control-btn">Play</button>
+        <button id="reset-btn" class="control-btn">Reset</button>
+        <div class="slider-container">
+            <span style="font-weight: bold;" id="time-label">Time:</span>
+            <input type="range" id="time-slider" min="0" max="1000" value="1000" step="0.01">
+            <span class="value-display" id="time-display">10.00 Ma</span>
+        </div>
+        <label class="toggle-label">
+            <input type="checkbox" id="scaling-toggle">
+            <span id="legacy-label">Legacy Scaling</span>
+        </label>
+    </div>
+
+    <div id="main-view">
+        <div id="map-container">
+            <div class="legend-container" id="map-legend"></div>
+        </div>
+        <div id="graph-container"></div>
+    </div>
+
+    <div id="tooltip"></div>
+
+    <script>
+        // Localization
+        const i18n = {
+            en: {
+                title: "Hominid Brain Size Evolution",
+                citation: "Data source: brain-size-list_2.csv | Visualization: D3.js v7",
+                stats: "Loaded {n} specimens",
+                play: "Play",
+                pause: "Pause",
+                reset: "Reset",
+                time: "Time",
+                legacy: "Legacy Scaling",
+                ageAxis: "Age (Million Years Ago)",
+                sizeAxis: "Cranial Capacity (cc)",
+                legendTitle: "Cranial Capacity (cc)",
+                tooltipName: "Name",
+                tooltipSpecies: "Species",
+                tooltipAge: "Age",
+                tooltipSize: "Size",
+                maSuffix: " Ma"
+            },
+            ja: {
+                title: "脳容量の進化",
+                citation: "データソース: brain-size-list_2.csv | 可視化: D3.js v7",
+                stats: "{n} 個の標本をロードしました",
+                play: "開始",
+                pause: "停止",
+                reset: "リセット",
+                time: "時間",
+                legacy: "レガシースケーリング",
+                ageAxis: "年代 (万年前)",
+                sizeAxis: "脳容量 (cc)",
+                legendTitle: "脳容量 (cc)",
+                tooltipName: "名前",
+                tooltipSpecies: "種名",
+                tooltipAge: "年代",
+                tooltipSize: "容量",
+                maSuffix: " 万年前"
+            }
+        };
+
+        // Configuration
+        const config = {
+            transitionDuration: 300,
+            playSpeed: 50, // ms per tick
+            defaultStepSize: 2,   // internal ticks per step
+            baseRadius: 5,
+            baseStroke: 0.5,
+            highlightRadiusMultiplier: 2
+        };
+
+        // State
+        let state = {
+            data: [],
+            currentTime: 1000,
+            isPlaying: false,
+            timer: null,
+            useLegacyScaling: false,
+            lang: 'en'
+        };
+
+        // DOM Elements
+        const slider = document.getElementById('time-slider');
+        const timeDisplay = document.getElementById('time-display');
+        const playBtn = document.getElementById('play-pause-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const langBtn = document.getElementById('lang-btn');
+        const scalingToggle = document.getElementById('scaling-toggle');
+        const tooltip = document.getElementById('tooltip');
+        const mapContainer = document.getElementById('map-container');
+        const graphContainer = document.getElementById('graph-container');
+
+        // Text Elements
+        const titleText = document.getElementById('title-text');
+        const citationText = document.getElementById('citation-text');
+        const statsDisplay = document.getElementById('stats-display');
+        const timeLabel = document.getElementById('time-label');
+        const legacyLabel = document.getElementById('legacy-label');
+
+
+        // Main Initialization
+        Promise.all([
+            d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json'),
+            d3.csv('brain-size-list_2.csv', d3.autoType)
+        ]).then(([worldData, csvData]) => {
+            // Process Data
+            const cleanData = csvData.map(d => ({
+                id: d.ID,
+                species: d.Species,
+                name: d.Name,
+                age: +d.Age,
+                cc: +d.CC,
+                lat: +d.Lat,
+                long: +d.Long,
+                normalizedTime: (+d.Age) * 100
+            })).filter(d => d.age != null && d.cc != null && d.lat != null && d.long != null);
+
+            state.data = cleanData;
+            updateStatsText();
+
+            // Initial Draw
+            initVis(worldData, cleanData);
+
+            // Event Listeners
+            slider.addEventListener('input', (e) => {
+                state.currentTime = +e.target.value;
+                updateTimeDisplay();
+                updateVis();
+            });
+
+            playBtn.addEventListener('click', togglePlay);
+            resetBtn.addEventListener('click', () => {
+                if (state.isPlaying) togglePlay();
+                state.currentTime = 1000;
+                slider.value = 1000;
+                updateTimeDisplay();
+                updateVis();
+
+                clearHighlights();
+            });
+
+            scalingToggle.addEventListener('change', (e) => {
+                state.useLegacyScaling = e.target.checked;
+                graphVis.updateScale(state.useLegacyScaling);
+                updateVis();
+            });
+
+            langBtn.addEventListener('click', toggleLanguage);
+
+            // Background Click to Clear - Attached to documents to catch all global clicks not stopped
+            // But we have specific handling on SVGs too. 
+        });
+
+        // Visualization Instances
+        let mapVis, graphVis;
+
+        function initVis(worldData, data) {
+            mapVis = new MapVis(mapContainer, worldData, data);
+            graphVis = new GraphVis(graphContainer, data);
+
+            // Initial Update
+            updateTimeDisplay();
+            updateVis();
+        }
+
+        function updateVis() {
+            mapVis.update(state.data, state.currentTime);
+            graphVis.update(state.data, state.currentTime);
+        }
+
+        function highlightSpecimen(id) {
+            mapVis.highlight(id);
+            graphVis.highlight(id);
+        }
+
+        function clearHighlights() {
+            mapVis.highlight(null);
+            graphVis.highlight(null);
+        }
+
+        function updateTimeDisplay() {
+            state.currentTime = +slider.value;
+            const suffix = i18n[state.lang].maSuffix;
+
+            if (state.lang === 'ja') {
+                // In Japanese, use "万年前" (Ten Thousand Years Ago).
+                // slider=1000 means 10.00 Ma (10,000,000 years).
+                // 10,000,000 years / 10,000 = 1000 (万年).
+                // So state.currentTime is exactly the number of "Ten Thousands".
+                const val = Math.round(state.currentTime);
+                timeDisplay.textContent = `${val}${suffix}`;
+            } else {
+                // In English, use Ma (Millions).
+                const ma = state.currentTime / 100;
+                timeDisplay.textContent = `${ma.toFixed(2)}${suffix}`;
+            }
+        }
+
+        function updateStatsText() {
+            let text = i18n[state.lang].stats.replace('{n}', state.data.length);
+            statsDisplay.innerText = text;
+        }
+
+        // Language Toggle Logic
+        function toggleLanguage() {
+            state.lang = state.lang === 'en' ? 'ja' : 'en';
+
+            // Update static strings
+            const t = i18n[state.lang];
+            titleText.textContent = t.title;
+            citationText.textContent = t.citation;
+
+            updateStatsText();
+
+            playBtn.textContent = state.isPlaying ? t.pause : t.play;
+            resetBtn.textContent = t.reset;
+            timeLabel.textContent = t.time + ":";
+            legacyLabel.textContent = t.legacy;
+
+            // Update Time Display (suffix)
+            updateTimeDisplay();
+
+            // Trigger Visual Updates for Labels
+            mapVis.updateLanguage();
+            graphVis.updateLanguage();
+        }
+
+        // Legacy Speed Logic
+        function getLegacyStep(value) {
+            if (value <= 1) { return 0.02 }
+            else if (value <= 1.6) { return 0.04 }
+            else if (value <= 3) { return 0.06 }
+            else if (value <= 6) { return 0.1 }
+            else if (value <= 12) { return 0.2 }
+            else if (value <= 30) { return 0.5 }
+            else if (value <= 65) { return 0.7 }
+            else if (value <= 120) { return 1 }
+            else if (value <= 250) { return 2 }
+            else if (value <= 400) { return 10 }
+            else if (value <= 1000) { return 20 }
+            return config.defaultStepSize;
+        }
+
+        function togglePlay() {
+            state.isPlaying = !state.isPlaying;
+            const t = i18n[state.lang];
+            playBtn.textContent = state.isPlaying ? t.pause : t.play;
+
+            if (state.isPlaying) {
+                state.timer = setInterval(() => {
+                    let step = config.defaultStepSize;
+
+                    if (state.useLegacyScaling) {
+                        step = getLegacyStep(+slider.value);
+                    }
+
+                    let newVal = +slider.value - step;
+                    if (newVal < 0) {
+                        newVal = 0;
+                        togglePlay();
+                    }
+                    slider.value = newVal;
+                    state.currentTime = newVal;
+                    updateTimeDisplay();
+                    updateVis();
+                }, config.playSpeed);
+            } else {
+                clearInterval(state.timer);
+            }
+        }
+
+        // Helper for Tooltip
+        function showTooltip(event, d) {
+            const t = i18n[state.lang];
+            tooltip.style.display = 'block';
+            tooltip.innerHTML = `
+                 <div class="tooltip-row"><span class="tooltip-label">${t.tooltipName}:</span> ${d.name}</div>
+                 <div class="tooltip-row"><span class="tooltip-label">${t.tooltipSpecies}:</span> <i>${d.species}</i></div>
+                 <div class="tooltip-row"><span class="tooltip-label">${t.tooltipAge}:</span> ${d.age} Ma</div>
+                 <div class="tooltip-row"><span class="tooltip-label">${t.tooltipSize}:</span> ${d.cc} cc</div>
+             `;
+            // Ensure tooltip stays on screen
+            const tooltipRect = tooltip.getBoundingClientRect();
+            let left = event.pageX + 10;
+            let top = event.pageY + 10;
+
+            if (left + tooltipRect.width > window.innerWidth) {
+                left = event.pageX - tooltipRect.width - 10;
+            }
+
+            tooltip.style.left = left + 'px';
+            tooltip.style.top = top + 'px';
+        }
+
+        // --- VISUALIZATION CLASSES ---
+
+        class MapVis {
+            constructor(container, worldData, allData) {
+                this.container = container;
+                this.worldData = worldData;
+                this.width = container.getBoundingClientRect().width;
+                this.height = container.getBoundingClientRect().height;
+                this.currentZoom = 1; // Track zoom level
+
+                this.svg = d3.select(container).append('svg')
+                    .attr('width', '100%')
+                    .attr('height', '100%')
+                    .attr('viewBox', `0 0 ${this.width} ${this.height}`)
+                    .on('click', (e) => {
+                        if (e.target.tagName !== 'circle') {
+                            clearHighlights();
+                        }
+                    });
+
+                // Add Zoom Behavior
+                const zoom = d3.zoom()
+                    .scaleExtent([1, 8]) // 1x to 8x zoom
+                    .on('zoom', (event) => {
+                        this.currentZoom = event.transform.k;
+                        this.mapGroup.attr('transform', event.transform);
+
+                        // Keep dots same visual size
+                        this.pointsGroup.selectAll('circle')
+                            .attr('r', d => (d.highlighted ? config.baseRadius * config.highlightRadiusMultiplier : config.baseRadius) / this.currentZoom)
+                            .attr('stroke-width', d => (d.highlighted ? 2 : config.baseStroke) / this.currentZoom);
+
+                        this.mapGroup.selectAll('.country')
+                            .attr('stroke-width', 0.5 / this.currentZoom);
+
+                        this.mapGroup.selectAll('.graticule')
+                            .attr('stroke-width', 0.5 / this.currentZoom);
+                    });
+
+                this.svg.call(zoom);
+
+                // Create a group for map content that will be zoomed
+                this.mapGroup = this.svg.append('g');
+
+                // Projection
+                this.projection = d3.geoEquirectangular()
+                    .translate([this.width / 2, this.height / 2])
+                    .scale(this.width / 6.5)
+                    .rotate([-10, 0]);
+
+                this.path = d3.geoPath().projection(this.projection);
+
+                this.colorScale = d3.scaleSequential(d3.interpolateViridis)
+                    .domain([300, 1600]);
+
+                this.initMap();
+                this.renderLegend();
+
+                window.addEventListener('resize', () => {
+                    this.width = container.getBoundingClientRect().width;
+                    this.height = container.getBoundingClientRect().height;
+                    // Reset zoom on resize might be better, or just update projection
+                    this.projection.translate([this.width / 2, this.height / 2]).scale(this.width / 6.5);
+                    this.mapGroup.selectAll('path').attr('d', this.path); // Update countries/grat lines
+                    this.update(state.data, state.currentTime);
+                });
+            }
+
+            initMap() {
+                const countries = topojson.feature(this.worldData, this.worldData.objects.countries);
+
+                // Graticules
+                this.mapGroup.append('path')
+                    .datum(d3.geoGraticule())
+                    .attr('class', 'graticule')
+                    .attr('d', this.path);
+
+                // Land
+                this.mapGroup.append('g')
+                    .selectAll('path')
+                    .data(countries.features)
+                    .enter().append('path')
+                    .attr('class', 'country')
+                    .attr('d', this.path);
+
+                // Points Container
+                this.pointsGroup = this.mapGroup.append('g');
+            }
+
+            renderLegend() {
+                // Legend is static in the corner, outside the Zoom Group
+                const legendWidth = 200;
+                const legendHeight = 10;
+
+                // Remove existing if needed
+                d3.select("#map-legend").selectAll("*").remove();
+
+                const defs = this.svg.append("defs"); // Defs in SVG
+
+                const linearGradient = defs.append("linearGradient")
+                    .attr("id", "linear-gradient");
+
+                linearGradient.selectAll("stop")
+                    .data(d3.ticks(0, 1, 10))
+                    .enter().append("stop")
+                    .attr("offset", d => d * 100 + "%")
+                    .attr("stop-color", d => this.colorScale(300 + d * (1600 - 300)));
+
+                const legend = d3.select("#map-legend");
+                this.legendTitle = legend.append("div").style("margin-bottom", "5px").style("font-weight", "bold");
+                this.updateLegendTitle();
+
+                const legendSvg = legend.append("svg")
+                    .attr("width", legendWidth + 20)
+                    .attr("height", 30);
+
+                legendSvg.append("rect")
+                    .attr("width", legendWidth)
+                    .attr("height", legendHeight)
+                    .style("fill", "url(#linear-gradient)");
+
+                const legendScale = d3.scaleLinear()
+                    .domain([300, 1600])
+                    .range([0, legendWidth]);
+
+                const legendAxis = d3.axisBottom(legendScale).ticks(5).tickSize(5);
+
+                legendSvg.append("g")
+                    .attr("transform", `translate(0, ${legendHeight})`)
+                    .call(legendAxis);
+            }
+
+            updateLegendTitle() {
+                this.legendTitle.text(i18n[state.lang].legendTitle);
+            }
+
+            updateLanguage() {
+                this.updateLegendTitle();
+            }
+
+            update(data, sliderVal) {
+                const currentAge = sliderVal / 100;
+                const visibleData = data.filter(d => d.age >= currentAge);
+
+                const circles = this.pointsGroup.selectAll('circle')
+                    .data(visibleData, d => d.id);
+
+                circles.enter()
+                    .append('circle')
+                    .attr('class', 'data-point')
+                    .attr('cx', d => this.projection([d.long, d.lat])[0])
+                    .attr('cy', d => this.projection([d.long, d.lat])[1])
+                    .attr('r', 0)
+                    .attr('fill', d => this.colorScale(d.cc))
+                    .attr('fill-opacity', 0.8)
+                    .attr('stroke', '#fff')
+                    .attr('stroke-width', config.baseStroke / this.currentZoom)
+                    .on('mouseover', (event, d) => {
+                        showTooltip(event, d);
+                        if (!d.highlighted) {
+                            d3.select(event.target).attr('stroke', '#000').attr('stroke-width', 2 / this.currentZoom);
+                        }
+                    })
+                    .on('mouseout', (event, d) => {
+                        tooltip.style.display = 'none';
+                        if (!d.highlighted) {
+                            d3.select(event.target).attr('stroke', '#fff').attr('stroke-width', config.baseStroke / this.currentZoom);
+                        }
+                    })
+                    .on('click', (event, d) => {
+                        event.stopPropagation();
+                        highlightSpecimen(d.id);
+                    })
+                    .transition().duration(config.transitionDuration)
+                    .attr('r', d => (d.highlighted ? config.baseRadius * config.highlightRadiusMultiplier : config.baseRadius) / this.currentZoom);
+
+                circles
+                    .attr('cx', d => this.projection([d.long, d.lat])[0])
+                    .attr('cy', d => this.projection([d.long, d.lat])[1])
+                    .attr('r', d => (d.highlighted ? config.baseRadius * config.highlightRadiusMultiplier : config.baseRadius) / this.currentZoom)
+                    .attr('stroke-width', d => (d.highlighted ? 2 : config.baseStroke) / this.currentZoom);
+
+                circles.exit()
+                    .transition().duration(config.transitionDuration)
+                    .attr('r', 0)
+                    .remove();
+            }
+
+            highlight(id) {
+                if (id === null) {
+                    this.pointsGroup.selectAll('circle')
+                        .each(function (d) { d.highlighted = false; })
+                        .classed('highlighted-point', false)
+                        .attr('r', config.baseRadius / this.currentZoom)
+                        .attr('stroke', '#fff')
+                        .attr('fill', d => this.colorScale(d.cc))
+                        .attr('stroke-width', config.baseStroke / this.currentZoom);
+                    return;
+                }
+
+                this.pointsGroup.selectAll('circle')
+                    .each(function (d) {
+                        d.highlighted = (d.id === id);
+                    })
+                    .classed('highlighted-point', d => d.highlighted)
+                    .attr('r', d => (d.highlighted ? config.baseRadius * config.highlightRadiusMultiplier : config.baseRadius) / this.currentZoom)
+                    .attr('stroke', d => d.highlighted ? '#d00' : '#fff')
+                    .attr('fill', d => d.highlighted ? '#ff0000' : this.colorScale(d.cc))
+                    .attr('stroke-width', d => (d.highlighted ? 2 : config.baseStroke) / this.currentZoom);
+            }
+        }
+
+        class GraphVis {
+            constructor(container, allData) {
+                this.container = container;
+                this.width = container.getBoundingClientRect().width;
+                this.height = container.getBoundingClientRect().height;
+                this.margin = { top: 20, right: 30, bottom: 40, left: 60 };
+
+                this.svg = d3.select(container).append('svg')
+                    .attr('width', '100%')
+                    .attr('height', '100%')
+                    .on('click', (e) => {
+                        if (e.target.tagName !== 'circle') {
+                            clearHighlights();
+                        }
+                    })
+                    .on('mousemove', (e) => {
+                        this.updateGuides(e);
+                    })
+                    .on('mouseout', () => {
+                        this.hideGuides();
+                    });
+
+                this.innerWidth = this.width - this.margin.left - this.margin.right;
+                this.innerHeight = this.height - this.margin.top - this.margin.bottom;
+
+                this.chartGroup = this.svg.append('g')
+                    .attr('transform', `translate(${this.margin.left},${this.margin.top})`);
+
+                this.yScale = d3.scaleLinear()
+                    .domain([0, 1800])
+                    .range([this.innerHeight, 0]);
+
+                this.colorScale = d3.scaleSequential(d3.interpolateViridis)
+                    .domain([300, 1600]);
+
+                this.initGraph(allData);
+
+                window.addEventListener('resize', () => {
+                    this.width = container.getBoundingClientRect().width;
+                    this.height = container.getBoundingClientRect().height;
+                    this.innerWidth = this.width - this.margin.left - this.margin.right;
+                    this.innerHeight = this.height - this.margin.top - this.margin.bottom;
+
+                    this.yScale.range([this.innerHeight, 0]);
+                    this.updateScale(state.useLegacyScaling, false);
+
+                    this.svg.selectAll('*').remove();
+                    this.chartGroup = this.svg.append('g').attr('transform', `translate(${this.margin.left},${this.margin.top})`);
+                    this.drawAxes();
+                    this.drawGuides();
+                    this.drawBackgroundDots(state.data);
+                    this.update(state.data, state.currentTime);
+                });
+            }
+
+            updateScale(isLegacy, redraw = true) {
+                if (isLegacy) {
+                    this.xScale = d3.scalePow()
+                        .exponent(0.3)
+                        .domain([10, 0])
+                        .range([0, this.innerWidth]);
+                } else {
+                    this.xScale = d3.scaleLinear()
+                        .domain([10, 0])
+                        .range([0, this.innerWidth]);
+                }
+
+                if (redraw) {
+                    this.svg.selectAll('*').remove();
+                    this.chartGroup = this.svg.append('g').attr('transform', `translate(${this.margin.left},${this.margin.top})`);
+                    this.drawAxes();
+                    this.drawGuides();
+                    this.drawBackgroundDots(state.data);
+                    this.update(state.data, state.currentTime);
+                }
+            }
+
+            initGraph(data) {
+                this.updateScale(false, false);
+                this.drawAxes();
+                this.drawGuides();
+                this.drawBackgroundDots(data);
+            }
+
+            drawAxes() {
+                const xAxis = d3.axisBottom(this.xScale);
+                const yAxis = d3.axisLeft(this.yScale);
+                const t = i18n[state.lang];
+
+                this.chartGroup.append('g')
+                    .attr('class', 'axis x-axis')
+                    .attr('transform', `translate(0,${this.innerHeight})`)
+                    .call(xAxis);
+
+                this.xAxisLabel = this.chartGroup.append('text')
+                    .attr('class', 'axis-label')
+                    .attr('x', this.innerWidth / 2)
+                    .attr('y', this.innerHeight + 30)
+                    .style('text-anchor', 'middle')
+                    .text(t.ageAxis);
+
+                this.chartGroup.append('g')
+                    .attr('class', 'axis y-axis')
+                    .call(yAxis);
+
+                this.yAxisLabel = this.chartGroup.append('text')
+                    .attr('class', 'axis-label')
+                    .attr('transform', 'rotate(-90)')
+                    .attr('x', -this.innerHeight / 2)
+                    .attr('y', -45)
+                    .style('text-anchor', 'middle')
+                    .text(t.sizeAxis);
+
+                this.timeLine = this.chartGroup.append('line')
+                    .attr('class', 'timewindow-line')
+                    .attr('y1', 0)
+                    .attr('y2', this.innerHeight)
+                    .style('display', 'none');
+            }
+
+            drawGuides() {
+                // Dashed lines for cursor
+                this.guideX = this.chartGroup.append('line')
+                    .attr('class', 'guide-line')
+                    .attr('y1', 0)
+                    .attr('y2', this.innerHeight);
+
+                this.guideY = this.chartGroup.append('line')
+                    .attr('class', 'guide-line')
+                    .attr('x1', 0)
+                    .attr('x2', this.innerWidth);
+            }
+
+            updateGuides(event) {
+                if (!this.guideX || !this.guideY) return;
+
+                // Get mouse position relative to chartGroup
+                const [x, y] = d3.pointer(event, this.chartGroup.node());
+
+                // Check if within bounds
+                if (x >= 0 && x <= this.innerWidth && y >= 0 && y <= this.innerHeight) {
+                    this.guideX.attr('x1', x).attr('x2', x).style('display', 'block');
+                    this.guideY.attr('y1', y).attr('y2', y).style('display', 'block');
+                } else {
+                    this.hideGuides();
+                }
+            }
+
+            hideGuides() {
+                if (this.guideX) this.guideX.style('display', 'none');
+                if (this.guideY) this.guideY.style('display', 'none');
+            }
+
+            updateLanguage() {
+                const t = i18n[state.lang];
+                if (this.xAxisLabel) this.xAxisLabel.text(t.ageAxis);
+                if (this.yAxisLabel) this.yAxisLabel.text(t.sizeAxis);
+            }
+
+            drawBackgroundDots(data) {
+                this.chartGroup.selectAll('.bg-dot')
+                    .data(data)
+                    .enter().append('circle')
+                    .attr('class', 'bg-dot')
+                    .attr('cx', d => this.xScale(d.age))
+                    .attr('cy', d => this.yScale(d.cc))
+                    .attr('r', 2)
+                    .attr('fill', '#eee');
+            }
+
+            update(data, sliderVal) {
+                const currentAge = sliderVal / 100;
+                const visibleData = data.filter(d => d.age >= currentAge);
+
+                const circles = this.chartGroup.selectAll('.active-dot')
+                    .data(visibleData, d => d.id);
+
+                circles.enter()
+                    .append('circle')
+                    .attr('class', 'active-dot')
+                    .attr('cx', d => this.xScale(d.age))
+                    .attr('cy', d => this.yScale(d.cc))
+                    .attr('r', 0)
+                    .attr('fill', d => this.colorScale(d.cc))
+                    .attr('stroke', '#333')
+                    .attr('stroke-width', 0.5)
+                    .on('mouseover', (event, d) => {
+                        showTooltip(event, d);
+                        d3.select(event.target).attr('stroke', '#000').attr('stroke-width', 2);
+                    })
+                    .on('mouseout', (event) => {
+                        tooltip.style.display = 'none';
+                        // Only reset if not selected. But how to know? d.selected or just assume class?
+                        if (!d3.select(event.target).classed('selected')) {
+                            d3.select(event.target).attr('stroke', '#333').attr('stroke-width', 0.5);
+                        }
+                    })
+                    .on('click', (event, d) => {
+                        event.stopPropagation();
+                        highlightSpecimen(d.id);
+                    })
+                    .transition().duration(200)
+                    .attr('r', 4);
+
+                circles.exit()
+                    .transition().duration(200)
+                    .attr('r', 0)
+                    .remove();
+
+                circles
+                    .attr('cx', d => this.xScale(d.age))
+                    .attr('cy', d => this.yScale(d.cc));
+
+                if (this.timeLine) {
+                    this.timeLine
+                        .style('display', 'block')
+                        .attr('x1', this.xScale(currentAge))
+                        .attr('x2', this.xScale(currentAge));
+                    // Ensure timeLine is above dots? currently appended last in drawAxes, but dots appended later.
+                    // Actually dots are appended later, raising them.
+                    this.timeLine.raise();
+                }
+            }
+
+            highlight(id) {
+                if (id === null) {
+                    this.chartGroup.selectAll('.active-dot')
+                        .classed('selected', false)
+                        .attr('stroke', '#333')
+                        .attr('stroke-width', 0.5)
+                        .attr('fill', d => this.colorScale(d.cc))
+                        .attr('r', 4);
+                    return;
+                }
+
+                // Remove highlight from all
+                this.chartGroup.selectAll('.active-dot')
+                    .classed('selected', false)
+                    .attr('stroke', '#333')
+                    .attr('stroke-width', 0.5)
+                    .attr('fill', d => this.colorScale(d.cc))
+                    .attr('r', 4);
+
+                // Add to specific
+                const dot = this.chartGroup.selectAll('.active-dot')
+                    .filter(d => d.id === id);
+
+                dot.classed('selected', true)
+                    .attr('stroke', '#d00')
+                    .attr('stroke-width', 2)
+                    .attr('fill', '#d00')
+                    .transition().duration(200)
+                    .attr('r', 8);
+            }
+        }
+    </script>
+</body>
+
+</html>
