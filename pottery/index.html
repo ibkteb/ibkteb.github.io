@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Early Pottery Sites Worldwide</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #333333;
+            --border-color: #cccccc;
+            --accent-color: #2c3e50;
+            --map-land: #e8e4df;
+            --map-ocean: #f5f5f5;
+            --map-stroke: #999999;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            width: 100%;
+            max-width: 1400px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 2px solid var(--text-color);
+            padding-bottom: 10px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .citation {
+            font-size: 12px;
+            color: #666;
+        }
+
+        #controls {
+            width: 100%;
+            max-width: 1400px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 10px;
+            background: #f9f9f9;
+            border: 1px solid var(--border-color);
+            margin-bottom: 20px;
+            font-size: 14px;
+            flex-wrap: wrap;
+        }
+
+        #lang-btn {
+            background: none;
+            border: 1px solid #999;
+            color: #666;
+            padding: 4px 8px;
+            font-size: 11px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        #lang-btn:hover {
+            background: #eee;
+            color: #333;
+        }
+
+        button.control-btn {
+            padding: 6px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            background: white;
+            border: 1px solid var(--text-color);
+            border-radius: 2px;
+            transition: background 0.2s;
+        }
+
+        button.control-btn:hover {
+            background: #eee;
+        }
+
+        button.control-btn:active {
+            background: #ddd;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            flex-grow: 1;
+            gap: 15px;
+        }
+
+        input[type=range] {
+            flex-grow: 1;
+            cursor: pointer;
+            margin: 0 10px;
+        }
+
+        .value-display {
+            font-family: "Courier New", monospace;
+            font-weight: bold;
+            min-width: 120px;
+            text-align: right;
+        }
+
+        #main-view {
+            display: flex;
+            flex-direction: row;
+            width: 100%;
+            max-width: 1400px;
+            height: calc(100% - 140px);
+            gap: 20px;
+        }
+
+        #map-container {
+            flex: 2;
+            border: 1px solid var(--border-color);
+            position: relative;
+            background: var(--map-ocean);
+            overflow: hidden;
+        }
+
+        #graph-container {
+            flex: 1;
+            border: 1px solid var(--border-color);
+            position: relative;
+            background: white;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Tooltip */
+        #tooltip {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.97);
+            border: 1px solid #333;
+            padding: 10px;
+            font-size: 12px;
+            pointer-events: none;
+            box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.15);
+            display: none;
+            z-index: 100;
+            max-width: 300px;
+            border-radius: 4px;
+        }
+
+        .tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 3px;
+        }
+
+        .tooltip-label {
+            font-weight: bold;
+            color: #666;
+        }
+
+        .tooltip-value {
+            text-align: right;
+        }
+
+        /* D3 Styles */
+        .graticule {
+            fill: none;
+            stroke: #ddd;
+            stroke-width: 0.5px;
+            stroke-opacity: 0.5;
+        }
+
+        .country {
+            fill: var(--map-land);
+            stroke: var(--map-stroke);
+            stroke-width: 0.5px;
+        }
+
+        .data-point {
+            cursor: pointer;
+            transition: r 0.2s, stroke-width 0.2s;
+        }
+
+        .data-point:hover {
+            stroke: #000;
+        }
+
+        .highlighted-point {
+            stroke: #000 !important;
+            stroke-width: 2px !important;
+            filter: brightness(1.2);
+        }
+
+        .active-dot {
+            cursor: pointer;
+        }
+
+        .active-dot:hover {
+            stroke: #000;
+            stroke-width: 2px;
+        }
+
+        .active-dot.selected {
+            stroke: #000;
+            stroke-width: 2px;
+        }
+
+        .axis-label {
+            font-size: 12px;
+            font-style: italic;
+        }
+
+        .axis line,
+        .axis path {
+            stroke: #333;
+        }
+
+        .axis text {
+            fill: #333;
+            font-family: sans-serif;
+            font-size: 10px;
+        }
+
+        .timewindow-line {
+            stroke: #d00;
+            stroke-width: 1.5px;
+            stroke-dasharray: 4 2;
+        }
+
+        /* Guide Lines for Graph Cursor */
+        .guide-line {
+            stroke: #999;
+            stroke-width: 1px;
+            stroke-dasharray: 4 4;
+            pointer-events: none;
+            display: none;
+        }
+
+        .legend-container {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 12px;
+            border: 1px solid #ccc;
+            font-size: 11px;
+            pointer-events: none;
+            border-radius: 4px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 5px;
+        }
+
+        .legend-color {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 1px solid #666;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .filter-group label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .filter-group input[type="checkbox"] {
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div>
+            <h1 id="title-text">Early Pottery Sites Worldwide</h1>
+            <div class="citation" id="citation-text">Data source: early pottery sites - list.csv | Visualization: D3.js
+                v7</div>
+        </div>
+        <div style="text-align: right; font-size: 12px;">
+            <span id="stats-display">Loaded 0 sites</span>
+            <button id="lang-btn">EN/JA</button>
+        </div>
+    </header>
+
+    <div id="controls">
+        <button id="play-pause-btn" class="control-btn">Play</button>
+        <button id="reset-btn" class="control-btn">Reset</button>
+        <div class="slider-container">
+            <span style="font-weight: bold;" id="time-label">Time:</span>
+            <input type="range" id="time-slider" min="0" max="17000" value="17000" step="10">
+            <span class="value-display" id="time-display">17,000 BP</span>
+        </div>
+        <div class="filter-group" id="filter-group">
+            <span style="font-weight: bold;" id="filter-label">Economy:</span>
+            <label><input type="checkbox" id="filter-hg" checked> <span id="filter-hg-label">HG</span></label>
+            <label><input type="checkbox" id="filter-f" checked> <span id="filter-f-label">F</span></label>
+            <label><input type="checkbox" id="filter-me" checked> <span id="filter-me-label">ME</span></label>
+        </div>
+        <div class="filter-group">
+            <label><input type="checkbox" id="filter-kites"> <span id="filter-kites-label">Desert Kites</span></label>
+        </div>
+    </div>
+
+    <div id="main-view">
+        <div id="map-container">
+            <div class="legend-container" id="map-legend"></div>
+        </div>
+        <div id="graph-container"></div>
+    </div>
+
+    <div id="tooltip"></div>
+
+    <script>
+        // Localization
+        const i18n = {
+            en: {
+                title: "Early Pottery Sites Worldwide",
+                citation: "Data source: early pottery sites - list.csv | Visualization: D3.js v7",
+                stats: "Loaded {n} sites",
+                play: "Play",
+                pause: "Pause",
+                reset: "Reset",
+                time: "Time",
+                filter: "Economy",
+                ageAxis: "Age (Years BP)",
+                latAxis: "Latitude",
+                legendTitle: "Economy Type",
+                tooltipName: "Site",
+                tooltipAge: "Age",
+                tooltipAgeCal: "Cal BP",
+                tooltipEconomy: "Economy",
+                tooltipLat: "Latitude",
+                tooltipLong: "Longitude",
+                bpSuffix: " BP",
+                economyHG: "Hunter-Gatherer",
+                economyF: "Farmer",
+                economyME: "Mixed Economy",
+                economyOther: "Unknown/Other",
+                kites: "Desert Kites"
+            },
+            ja: {
+                title: "世界の初期土器遺跡",
+                citation: "データソース: early pottery sites - list.csv | 可視化: D3.js v7",
+                stats: "{n} 箇所の遺跡をロードしました",
+                play: "開始",
+                pause: "停止",
+                reset: "リセット",
+                time: "時間",
+                filter: "経済",
+                ageAxis: "年代 (BP年)",
+                latAxis: "緯度",
+                legendTitle: "経済タイプ",
+                tooltipName: "遺跡名",
+                tooltipAge: "年代",
+                tooltipAgeCal: "較正BP",
+                tooltipEconomy: "経済",
+                tooltipLat: "緯度",
+                tooltipLong: "経度",
+                bpSuffix: " BP",
+                economyHG: "狩猟採集民",
+                economyF: "農耕民",
+                economyME: "混合経済",
+                economyOther: "不明/その他",
+                kites: "砂漠の凧"
+            }
+        };
+
+        // Economy color scale
+        const economyColors = {
+            'HG': '#3498db',  // Blue - Hunter-Gatherer
+            'F': '#27ae60',   // Green - Farmer  
+            'ME': '#9b59b6',  // Purple - Mixed Economy
+            'other': '#95a5a6' // Gray - Unknown/Other
+        };
+
+        // Configuration
+        const config = {
+            transitionDuration: 300,
+            playSpeed: 30,
+            defaultStepSize: 50,
+            baseRadius: 6,
+            baseStroke: 0.5,
+            highlightRadiusMultiplier: 1.8
+        };
+
+        // State
+        let state = {
+            data: [],
+            currentTime: 17000,
+            isPlaying: false,
+            timer: null,
+            lang: 'en',
+            filters: {
+                HG: true,
+                F: true,
+                ME: true
+            }
+        };
+
+        // DOM Elements
+        const slider = document.getElementById('time-slider');
+        const timeDisplay = document.getElementById('time-display');
+        const playBtn = document.getElementById('play-pause-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const langBtn = document.getElementById('lang-btn');
+        const tooltip = document.getElementById('tooltip');
+        const mapContainer = document.getElementById('map-container');
+        const graphContainer = document.getElementById('graph-container');
+
+        // Filter checkboxes
+        const filterHG = document.getElementById('filter-hg');
+        const filterF = document.getElementById('filter-f');
+        const filterME = document.getElementById('filter-me');
+        const filterKites = document.getElementById('filter-kites');
+
+        // Text Elements
+        const titleText = document.getElementById('title-text');
+        const citationText = document.getElementById('citation-text');
+        const statsDisplay = document.getElementById('stats-display');
+        const timeLabel = document.getElementById('time-label');
+        const filterLabel = document.getElementById('filter-label');
+
+        // Helper to normalize economy types
+        function normalizeEconomy(eco) {
+            if (!eco) return 'other';
+            const e = eco.toString().trim().toUpperCase().replace(/[^A-Z\/]/g, '');
+            if (e === 'HG') return 'HG';
+            if (e === 'F') return 'F';
+            if (e === 'ME' || e.includes('HG') && e.includes('ME') || e === 'F/ME' || e === 'HG/ME') return 'ME';
+            if (e.includes('F')) return 'F';
+            return 'other';
+        }
+
+        // Main Initialization
+        Promise.all([
+            d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json'),
+            d3.csv('pottery_sites.csv'),
+            d3.json('kites.json')
+        ]).then(([worldData, csvData, kitesData]) => {
+            // Process Data
+            const cleanData = csvData.map((d, i) => {
+                // Parse age - handle multi-line values in CSV
+                let dateStr = d['DateBP \n(uncal) ± SD'] || d['DateBP (uncal) ± SD'] || '';
+                let calBP = d['Average date cal BP \n(INTCAL 09)'] || d['Average date cal BP (INTCAL 09)'] || '';
+
+                // Extract numeric values
+                let uncalBP = parseInt(dateStr.toString().replace(/[^\d]/g, '').slice(0, 5)) || 0;
+                let calibratedBP = parseInt(calBP.toString().replace(/[^\d]/g, '')) || uncalBP;
+
+                return {
+                    id: i,
+                    name: (d['Site Name'] || '').trim(),
+                    lat: parseFloat(d.Latitude),
+                    long: parseFloat(d.Longitude),
+                    uncalBP: uncalBP,
+                    calBP: calibratedBP,
+                    economy: normalizeEconomy(d.Economy),
+                    retained: d.Retained === 'TRUE'
+                };
+            }).filter(d =>
+                d.name &&
+                !isNaN(d.lat) &&
+                !isNaN(d.long) &&
+                d.calBP > 0 &&
+                d.lat >= -90 && d.lat <= 90 &&
+                d.long >= -180 && d.long <= 180
+            );
+
+            state.data = cleanData;
+            updateStatsText();
+
+            // Set slider max to oldest date
+            const maxAge = Math.max(...cleanData.map(d => d.calBP));
+            slider.max = Math.ceil(maxAge / 100) * 100;
+            slider.value = slider.max;
+            state.currentTime = +slider.max;
+
+            // Initial Draw
+            initVis(worldData, cleanData, kitesData);
+
+            // Event Listeners
+            slider.addEventListener('input', (e) => {
+                state.currentTime = +e.target.value;
+                updateTimeDisplay();
+                updateVis();
+            });
+
+            playBtn.addEventListener('click', togglePlay);
+            resetBtn.addEventListener('click', () => {
+                if (state.isPlaying) togglePlay();
+                state.currentTime = +slider.max;
+                slider.value = slider.max;
+                updateTimeDisplay();
+                updateVis();
+                clearHighlights();
+            });
+
+            // Filter listeners
+            filterHG.addEventListener('change', (e) => {
+                state.filters.HG = e.target.checked;
+                updateVis();
+            });
+            filterF.addEventListener('change', (e) => {
+                state.filters.F = e.target.checked;
+                updateVis();
+            });
+            filterME.addEventListener('change', (e) => {
+                state.filters.ME = e.target.checked;
+                updateVis();
+            });
+            filterKites.addEventListener('change', (e) => {
+                mapVis.toggleKites(e.target.checked);
+            });
+
+            langBtn.addEventListener('click', toggleLanguage);
+        });
+
+        // Visualization Instances
+        let mapVis, graphVis;
+
+        function initVis(worldData, data, kitesData) {
+            mapVis = new MapVis(mapContainer, worldData, data, kitesData);
+            graphVis = new GraphVis(graphContainer, data);
+
+            // Initial Update
+            updateTimeDisplay();
+            updateVis();
+        }
+
+        function getFilteredData() {
+            return state.data.filter(d => {
+                if (d.economy === 'HG' && !state.filters.HG) return false;
+                if (d.economy === 'F' && !state.filters.F) return false;
+                if ((d.economy === 'ME' || d.economy === 'other') && !state.filters.ME) return false;
+                return true;
+            });
+        }
+
+        function updateVis() {
+            const filteredData = getFilteredData();
+            mapVis.update(filteredData, state.currentTime);
+            graphVis.update(filteredData, state.currentTime);
+        }
+
+        function highlightSpecimen(id) {
+            mapVis.highlight(id);
+            graphVis.highlight(id);
+        }
+
+        function clearHighlights() {
+            mapVis.highlight(null);
+            graphVis.highlight(null);
+        }
+
+        function updateTimeDisplay() {
+            state.currentTime = +slider.value;
+            const val = Math.round(state.currentTime);
+            timeDisplay.textContent = val.toLocaleString() + i18n[state.lang].bpSuffix;
+        }
+
+        function updateStatsText() {
+            let text = i18n[state.lang].stats.replace('{n}', state.data.length);
+            statsDisplay.innerText = text;
+        }
+
+        // Language Toggle Logic
+        function toggleLanguage() {
+            state.lang = state.lang === 'en' ? 'ja' : 'en';
+
+            const t = i18n[state.lang];
+            titleText.textContent = t.title;
+            citationText.textContent = t.citation;
+
+            updateStatsText();
+
+            playBtn.textContent = state.isPlaying ? t.pause : t.play;
+            resetBtn.textContent = t.reset;
+            timeLabel.textContent = t.time + ":";
+            filterLabel.textContent = t.filter + ":";
+            document.getElementById('filter-kites-label').textContent = t.kites;
+
+            updateTimeDisplay();
+
+            mapVis.updateLanguage();
+            graphVis.updateLanguage();
+        }
+
+        function togglePlay() {
+            state.isPlaying = !state.isPlaying;
+            const t = i18n[state.lang];
+            playBtn.textContent = state.isPlaying ? t.pause : t.play;
+
+            if (state.isPlaying) {
+                state.timer = setInterval(() => {
+                    let step = config.defaultStepSize;
+                    let newVal = +slider.value - step;
+                    if (newVal < 0) {
+                        newVal = 0;
+                        togglePlay();
+                    }
+                    slider.value = newVal;
+                    state.currentTime = newVal;
+                    updateTimeDisplay();
+                    updateVis();
+                }, config.playSpeed);
+            } else {
+                clearInterval(state.timer);
+            }
+        }
+
+        // Helper for Tooltip
+        function showTooltip(event, d) {
+            const t = i18n[state.lang];
+            const economyText = {
+                'HG': t.economyHG,
+                'F': t.economyF,
+                'ME': t.economyME,
+                'other': t.economyOther
+            };
+
+            tooltip.style.display = 'block';
+            tooltip.innerHTML = `
+                <div class="tooltip-row"><span class="tooltip-label">${t.tooltipName}:</span> <span class="tooltip-value">${d.name}</span></div>
+                <div class="tooltip-row"><span class="tooltip-label">${t.tooltipAgeCal}:</span> <span class="tooltip-value">${d.calBP.toLocaleString()} BP</span></div>
+                <div class="tooltip-row"><span class="tooltip-label">${t.tooltipEconomy}:</span> <span class="tooltip-value">${economyText[d.economy] || economyText.other}</span></div>
+                <div class="tooltip-row"><span class="tooltip-label">${t.tooltipLat}:</span> <span class="tooltip-value">${d.lat.toFixed(2)}°</span></div>
+                <div class="tooltip-row"><span class="tooltip-label">${t.tooltipLong}:</span> <span class="tooltip-value">${d.long.toFixed(2)}°</span></div>
+            `;
+
+            const tooltipRect = tooltip.getBoundingClientRect();
+            let left = event.pageX + 10;
+            let top = event.pageY + 10;
+
+            if (left + tooltipRect.width > window.innerWidth) {
+                left = event.pageX - tooltipRect.width - 10;
+            }
+            if (top + tooltipRect.height > window.innerHeight) {
+                top = event.pageY - tooltipRect.height - 10;
+            }
+
+            tooltip.style.left = left + 'px';
+            tooltip.style.top = top + 'px';
+        }
+
+        // --- VISUALIZATION CLASSES ---
+
+        class MapVis {
+            constructor(container, worldData, allData, kitesData) {
+                this.container = container;
+                this.worldData = worldData;
+                this.kitesData = kitesData;
+                this.width = container.getBoundingClientRect().width;
+                this.height = container.getBoundingClientRect().height;
+                this.currentZoom = 1;
+
+                this.svg = d3.select(container).append('svg')
+                    .attr('width', '100%')
+                    .attr('height', '100%')
+                    .attr('viewBox', `0 0 ${this.width} ${this.height}`)
+                    .on('click', (e) => {
+                        if (e.target.tagName !== 'circle') {
+                            clearHighlights();
+                        }
+                    });
+
+                // Add Zoom Behavior
+                const zoom = d3.zoom()
+                    .scaleExtent([1, 8])
+                    .on('zoom', (event) => {
+                        this.currentZoom = event.transform.k;
+                        this.mapGroup.attr('transform', event.transform);
+
+                        if (this.kitesGroup) {
+                            this.kitesGroup.selectAll('circle')
+                                .attr('r', 2 / this.currentZoom);
+                        }
+
+                        this.pointsGroup.selectAll('circle')
+                            .attr('r', d => (d.highlighted ? config.baseRadius * config.highlightRadiusMultiplier : config.baseRadius) / this.currentZoom)
+                            .attr('stroke-width', d => (d.highlighted ? 2 : config.baseStroke) / this.currentZoom);
+
+                        this.mapGroup.selectAll('.country')
+                            .attr('stroke-width', 0.5 / this.currentZoom);
+
+                        this.mapGroup.selectAll('.graticule')
+                            .attr('stroke-width', 0.5 / this.currentZoom);
+                    });
+
+                this.svg.call(zoom);
+
+                this.mapGroup = this.svg.append('g');
+
+                this.projection = d3.geoEquirectangular()
+                    .translate([this.width / 2, this.height / 2])
+                    .scale(this.width / 6.5)
+                    .rotate([-10, 0]);
+
+                this.path = d3.geoPath().projection(this.projection);
+
+                this.initMap();
+                this.renderLegend();
+
+                window.addEventListener('resize', () => {
+                    this.width = container.getBoundingClientRect().width;
+                    this.height = container.getBoundingClientRect().height;
+                    this.projection.translate([this.width / 2, this.height / 2]).scale(this.width / 6.5);
+                    this.mapGroup.selectAll('path').attr('d', this.path);
+                    this.update(getFilteredData(), state.currentTime);
+                });
+            }
+
+            initMap() {
+                const countries = topojson.feature(this.worldData, this.worldData.objects.countries);
+
+                this.mapGroup.append('path')
+                    .datum(d3.geoGraticule())
+                    .attr('class', 'graticule')
+                    .attr('d', this.path);
+
+                this.mapGroup.append('g')
+                    .selectAll('path')
+                    .data(countries.features)
+                    .enter().append('path')
+                    .attr('class', 'country')
+                    .attr('d', this.path);
+
+                this.kitesGroup = this.mapGroup.append('g').attr('class', 'kites-layer').style('display', 'none');
+
+                // Draw Kites
+                if (this.kitesData && this.kitesData.features) {
+                    this.kitesGroup.selectAll('circle')
+                        .data(this.kitesData.features)
+                        .enter().append('circle')
+                        .attr('cx', d => this.projection(d.geometry.coordinates)[0])
+                        .attr('cy', d => this.projection(d.geometry.coordinates)[1])
+                        .attr('r', 2)
+                        .attr('fill', '#e74c3c')
+                        .attr('opacity', 0.6)
+                        .attr('stroke', 'none')
+                        .on('mouseover', (event, d) => {
+                            const t = i18n[state.lang];
+                            tooltip.style.display = 'block';
+                            tooltip.innerHTML = `
+                                <div class="tooltip-row"><span class="tooltip-label">${t.kites}:</span> <span class="tooltip-value">${d.properties.Kglob || 'Unknown'}</span></div>
+                                <div class="tooltip-row"><span class="tooltip-label">Type:</span> <span class="tooltip-value">${d.properties.Type || 'kite'}</span></div>
+                            `;
+                            const tooltipRect = tooltip.getBoundingClientRect();
+                            let left = event.pageX + 10;
+                            let top = event.pageY + 10;
+                            if (left + tooltipRect.width > window.innerWidth) left = event.pageX - tooltipRect.width - 10;
+                            if (top + tooltipRect.height > window.innerHeight) top = event.pageY - tooltipRect.height - 10;
+                            tooltip.style.left = left + 'px';
+                            tooltip.style.top = top + 'px';
+                        })
+                        .on('mouseout', () => {
+                            tooltip.style.display = 'none';
+                        });
+                }
+
+                this.pointsGroup = this.mapGroup.append('g');
+            }
+
+            renderLegend() {
+                d3.select("#map-legend").selectAll("*").remove();
+
+                const legend = d3.select("#map-legend");
+                this.legendTitle = legend.append("div")
+                    .style("margin-bottom", "8px")
+                    .style("font-weight", "bold");
+                this.updateLegendTitle();
+
+                const t = i18n[state.lang];
+                const items = [
+                    { key: 'HG', label: t.economyHG, color: economyColors.HG },
+                    { key: 'F', label: t.economyF, color: economyColors.F },
+                    { key: 'ME', label: t.economyME, color: economyColors.ME },
+                    { key: 'other', label: t.economyOther, color: economyColors.other }
+                ];
+
+                items.forEach(item => {
+                    const div = legend.append("div").attr("class", "legend-item");
+                    div.append("div")
+                        .attr("class", "legend-color")
+                        .style("background-color", item.color);
+                    div.append("span").text(item.label);
+                });
+            }
+
+            updateLegendTitle() {
+                this.legendTitle.text(i18n[state.lang].legendTitle);
+            }
+
+            updateLanguage() {
+                this.renderLegend();
+            }
+
+            toggleKites(show) {
+                if (this.kitesGroup) {
+                    this.kitesGroup.style('display', show ? 'block' : 'none');
+                }
+            }
+
+            update(data, sliderVal) {
+                const visibleData = data.filter(d => d.calBP >= sliderVal);
+
+                const circles = this.pointsGroup.selectAll('circle')
+                    .data(visibleData, d => d.id);
+
+                circles.enter()
+                    .append('circle')
+                    .attr('class', 'data-point')
+                    .attr('cx', d => this.projection([d.long, d.lat])[0])
+                    .attr('cy', d => this.projection([d.long, d.lat])[1])
+                    .attr('r', 0)
+                    .attr('fill', d => economyColors[d.economy] || economyColors.other)
+                    .attr('fill-opacity', 0.85)
+                    .attr('stroke', '#fff')
+                    .attr('stroke-width', config.baseStroke / this.currentZoom)
+                    .on('mouseover', (event, d) => {
+                        showTooltip(event, d);
+                        if (!d.highlighted) {
+                            d3.select(event.target).attr('stroke', '#000').attr('stroke-width', 2 / this.currentZoom);
+                        }
+                    })
+                    .on('mouseout', (event, d) => {
+                        tooltip.style.display = 'none';
+                        if (!d.highlighted) {
+                            d3.select(event.target).attr('stroke', '#fff').attr('stroke-width', config.baseStroke / this.currentZoom);
+                        }
+                    })
+                    .on('click', (event, d) => {
+                        event.stopPropagation();
+                        highlightSpecimen(d.id);
+                    })
+                    .transition().duration(config.transitionDuration)
+                    .attr('r', d => (d.highlighted ? config.baseRadius * config.highlightRadiusMultiplier : config.baseRadius) / this.currentZoom);
+
+                circles
+                    .attr('cx', d => this.projection([d.long, d.lat])[0])
+                    .attr('cy', d => this.projection([d.long, d.lat])[1])
+                    .attr('fill', d => economyColors[d.economy] || economyColors.other)
+                    .attr('r', d => (d.highlighted ? config.baseRadius * config.highlightRadiusMultiplier : config.baseRadius) / this.currentZoom)
+                    .attr('stroke-width', d => (d.highlighted ? 2 : config.baseStroke) / this.currentZoom);
+
+                circles.exit()
+                    .transition().duration(config.transitionDuration)
+                    .attr('r', 0)
+                    .remove();
+            }
+
+            highlight(id) {
+                if (id === null) {
+                    this.pointsGroup.selectAll('circle')
+                        .each(function (d) { d.highlighted = false; })
+                        .classed('highlighted-point', false)
+                        .attr('r', config.baseRadius / this.currentZoom)
+                        .attr('stroke', '#fff')
+                        .attr('stroke-width', config.baseStroke / this.currentZoom);
+                    return;
+                }
+
+                this.pointsGroup.selectAll('circle')
+                    .each(function (d) {
+                        d.highlighted = (d.id === id);
+                    })
+                    .classed('highlighted-point', d => d.highlighted)
+                    .attr('r', d => (d.highlighted ? config.baseRadius * config.highlightRadiusMultiplier : config.baseRadius) / this.currentZoom)
+                    .attr('stroke', d => d.highlighted ? '#000' : '#fff')
+                    .attr('stroke-width', d => (d.highlighted ? 2 : config.baseStroke) / this.currentZoom);
+            }
+        }
+
+        class GraphVis {
+            constructor(container, allData) {
+                this.container = container;
+                this.width = container.getBoundingClientRect().width;
+                this.height = container.getBoundingClientRect().height;
+                this.margin = { top: 20, right: 30, bottom: 50, left: 60 };
+
+                this.svg = d3.select(container).append('svg')
+                    .attr('width', '100%')
+                    .attr('height', '100%')
+                    .on('click', (e) => {
+                        if (e.target.tagName !== 'circle') {
+                            clearHighlights();
+                        }
+                    })
+                    .on('mousemove', (e) => {
+                        this.updateGuides(e);
+                    })
+                    .on('mouseout', () => {
+                        this.hideGuides();
+                    });
+
+                this.innerWidth = this.width - this.margin.left - this.margin.right;
+                this.innerHeight = this.height - this.margin.top - this.margin.bottom;
+
+                this.chartGroup = this.svg.append('g')
+                    .attr('transform', `translate(${this.margin.left},${this.margin.top})`);
+
+                // Find max age for x-scale
+                this.maxAge = Math.max(...allData.map(d => d.calBP));
+
+                this.xScale = d3.scaleLinear()
+                    .domain([this.maxAge, 0])
+                    .range([0, this.innerWidth]);
+
+                this.yScale = d3.scaleLinear()
+                    .domain([-90, 90])
+                    .range([this.innerHeight, 0]);
+
+                this.initGraph(allData);
+
+                window.addEventListener('resize', () => {
+                    this.width = container.getBoundingClientRect().width;
+                    this.height = container.getBoundingClientRect().height;
+                    this.innerWidth = this.width - this.margin.left - this.margin.right;
+                    this.innerHeight = this.height - this.margin.top - this.margin.bottom;
+
+                    this.xScale.range([0, this.innerWidth]);
+                    this.yScale.range([this.innerHeight, 0]);
+
+                    this.svg.selectAll('*').remove();
+                    this.chartGroup = this.svg.append('g').attr('transform', `translate(${this.margin.left},${this.margin.top})`);
+                    this.drawAxes();
+                    this.drawGuides();
+                    this.drawBackgroundDots(state.data);
+                    this.update(getFilteredData(), state.currentTime);
+                });
+            }
+
+            initGraph(data) {
+                this.drawAxes();
+                this.drawGuides();
+                this.drawBackgroundDots(data);
+            }
+
+            drawAxes() {
+                const xAxis = d3.axisBottom(this.xScale)
+                    .tickFormat(d => d >= 1000 ? (d / 1000) + 'k' : d);
+                const yAxis = d3.axisLeft(this.yScale);
+                const t = i18n[state.lang];
+
+                this.chartGroup.append('g')
+                    .attr('class', 'axis x-axis')
+                    .attr('transform', `translate(0,${this.innerHeight})`)
+                    .call(xAxis);
+
+                this.xAxisLabel = this.chartGroup.append('text')
+                    .attr('class', 'axis-label')
+                    .attr('x', this.innerWidth / 2)
+                    .attr('y', this.innerHeight + 40)
+                    .style('text-anchor', 'middle')
+                    .text(t.ageAxis);
+
+                this.chartGroup.append('g')
+                    .attr('class', 'axis y-axis')
+                    .call(yAxis);
+
+                this.yAxisLabel = this.chartGroup.append('text')
+                    .attr('class', 'axis-label')
+                    .attr('transform', 'rotate(-90)')
+                    .attr('x', -this.innerHeight / 2)
+                    .attr('y', -45)
+                    .style('text-anchor', 'middle')
+                    .text(t.latAxis);
+
+                // Equator line
+                this.chartGroup.append('line')
+                    .attr('x1', 0)
+                    .attr('x2', this.innerWidth)
+                    .attr('y1', this.yScale(0))
+                    .attr('y2', this.yScale(0))
+                    .attr('stroke', '#ccc')
+                    .attr('stroke-dasharray', '3 3');
+
+                this.timeLine = this.chartGroup.append('line')
+                    .attr('class', 'timewindow-line')
+                    .attr('y1', 0)
+                    .attr('y2', this.innerHeight)
+                    .style('display', 'none');
+            }
+
+            drawGuides() {
+                this.guideX = this.chartGroup.append('line')
+                    .attr('class', 'guide-line')
+                    .attr('y1', 0)
+                    .attr('y2', this.innerHeight);
+
+                this.guideY = this.chartGroup.append('line')
+                    .attr('class', 'guide-line')
+                    .attr('x1', 0)
+                    .attr('x2', this.innerWidth);
+            }
+
+            updateGuides(event) {
+                if (!this.guideX || !this.guideY) return;
+
+                const [x, y] = d3.pointer(event, this.chartGroup.node());
+
+                if (x >= 0 && x <= this.innerWidth && y >= 0 && y <= this.innerHeight) {
+                    this.guideX.attr('x1', x).attr('x2', x).style('display', 'block');
+                    this.guideY.attr('y1', y).attr('y2', y).style('display', 'block');
+                } else {
+                    this.hideGuides();
+                }
+            }
+
+            hideGuides() {
+                if (this.guideX) this.guideX.style('display', 'none');
+                if (this.guideY) this.guideY.style('display', 'none');
+            }
+
+            updateLanguage() {
+                const t = i18n[state.lang];
+                if (this.xAxisLabel) this.xAxisLabel.text(t.ageAxis);
+                if (this.yAxisLabel) this.yAxisLabel.text(t.latAxis);
+            }
+
+            drawBackgroundDots(data) {
+                this.chartGroup.selectAll('.bg-dot')
+                    .data(data)
+                    .enter().append('circle')
+                    .attr('class', 'bg-dot')
+                    .attr('cx', d => this.xScale(d.calBP))
+                    .attr('cy', d => this.yScale(d.lat))
+                    .attr('r', 2)
+                    .attr('fill', '#eee');
+            }
+
+            update(data, sliderVal) {
+                const visibleData = data.filter(d => d.calBP >= sliderVal);
+
+                const circles = this.chartGroup.selectAll('.active-dot')
+                    .data(visibleData, d => d.id);
+
+                circles.enter()
+                    .append('circle')
+                    .attr('class', 'active-dot')
+                    .attr('cx', d => this.xScale(d.calBP))
+                    .attr('cy', d => this.yScale(d.lat))
+                    .attr('r', 0)
+                    .attr('fill', d => economyColors[d.economy] || economyColors.other)
+                    .attr('stroke', '#333')
+                    .attr('stroke-width', 0.5)
+                    .on('mouseover', (event, d) => {
+                        showTooltip(event, d);
+                        d3.select(event.target).attr('stroke', '#000').attr('stroke-width', 2);
+                    })
+                    .on('mouseout', (event) => {
+                        tooltip.style.display = 'none';
+                        if (!d3.select(event.target).classed('selected')) {
+                            d3.select(event.target).attr('stroke', '#333').attr('stroke-width', 0.5);
+                        }
+                    })
+                    .on('click', (event, d) => {
+                        event.stopPropagation();
+                        highlightSpecimen(d.id);
+                    })
+                    .transition().duration(200)
+                    .attr('r', 4);
+
+                circles.exit()
+                    .transition().duration(200)
+                    .attr('r', 0)
+                    .remove();
+
+                circles
+                    .attr('cx', d => this.xScale(d.calBP))
+                    .attr('cy', d => this.yScale(d.lat))
+                    .attr('fill', d => economyColors[d.economy] || economyColors.other);
+
+                if (this.timeLine) {
+                    this.timeLine
+                        .style('display', 'block')
+                        .attr('x1', this.xScale(sliderVal))
+                        .attr('x2', this.xScale(sliderVal));
+                    this.timeLine.raise();
+                }
+            }
+
+            highlight(id) {
+                if (id === null) {
+                    this.chartGroup.selectAll('.active-dot')
+                        .classed('selected', false)
+                        .attr('stroke', '#333')
+                        .attr('stroke-width', 0.5)
+                        .attr('r', 4);
+                    return;
+                }
+
+                this.chartGroup.selectAll('.active-dot')
+                    .classed('selected', false)
+                    .attr('stroke', '#333')
+                    .attr('stroke-width', 0.5)
+                    .attr('r', 4);
+
+                const dot = this.chartGroup.selectAll('.active-dot')
+                    .filter(d => d.id === id);
+
+                dot.classed('selected', true)
+                    .attr('stroke', '#000')
+                    .attr('stroke-width', 2)
+                    .transition().duration(200)
+                    .attr('r', 8);
+            }
+        }
+    </script>
+</body>
+
+</html>

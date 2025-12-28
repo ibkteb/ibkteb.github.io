@@ -1,0 +1,3333 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chinese Syllable Charts - Interactive Phonetics</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600&family=Noto+Sans+TC:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0f0f1a;
+            --bg-secondary: #1a1a2e;
+            --bg-tertiary: #252541;
+            --bg-cell: #1e1e35;
+            --bg-cell-hover: #2a2a4a;
+            --text-primary: #e8e8f0;
+            --text-secondary: #a8a8c0;
+            --text-muted: #6e6e8a;
+            --accent-primary: #6366f1;
+            --accent-secondary: #8b5cf6;
+            --accent-tertiary: #ec4899;
+            --border-color: #3a3a5c;
+            --border-light: #2a2a45;
+            --ipa-color: #f472b6;
+            --pinyin-color: #60a5fa;
+            --zhuyin-color: #34d399;
+            --glass-bg: rgba(30, 30, 53, 0.85);
+            --shadow-lg: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            --shadow-glow: 0 0 30px rgba(99, 102, 241, 0.2);
+            --medial-w: #f59e0b;
+            --medial-j: #10b981;
+            --medial-y: #8b5cf6;
+        }
+
+        [data-theme="light"] {
+            --bg-primary: #f5f5f7;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #e8e8ed;
+            --bg-cell: #ffffff;
+            --bg-cell-hover: #f0f0f5;
+            --text-primary: #1a1a2e;
+            --text-secondary: #4a4a6a;
+            --text-muted: #8a8aa0;
+            --border-color: #d0d0e0;
+            --border-light: #e0e0ec;
+            --glass-bg: rgba(255, 255, 255, 0.9);
+            --shadow-lg: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
+            --shadow-glow: 0 0 30px rgba(99, 102, 241, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'Noto Sans SC', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background:
+                radial-gradient(ellipse at 20% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            position: relative;
+        }
+
+        header .theme-toggle {
+            position: absolute;
+            top: 0;
+            right: 0;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary), var(--accent-tertiary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            font-weight: 300;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .tab-btn {
+            padding: 0.75rem 1.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn:hover {
+            background: var(--bg-cell-hover);
+            border-color: var(--accent-primary);
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            border-color: transparent;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            border: 1px solid var(--border-light);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .search-box {
+            position: relative;
+            flex: 1;
+            min-width: 200px;
+            max-width: 350px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 0.6rem 1rem 0.6rem 2.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
+        .search-box::before {
+            content: '🔍';
+            position: absolute;
+            left: 0.8rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.9rem;
+            opacity: 0.6;
+        }
+
+        .toggle-group {
+            display: flex;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+        }
+
+        .toggle-btn {
+            padding: 0.5rem 0.8rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .toggle-btn:hover {
+            background: var(--bg-cell-hover);
+            border-color: var(--accent-primary);
+        }
+
+        .toggle-btn.active {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            border-color: transparent;
+        }
+
+        .theme-toggle {
+            width: 50px;
+            height: 28px;
+            border-radius: 14px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .theme-toggle::after {
+            content: '🌙';
+            position: absolute;
+            left: 3px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            transition: all 0.3s ease;
+        }
+
+        [data-theme="light"] .theme-toggle::after {
+            content: '☀️';
+            left: calc(100% - 25px);
+        }
+
+        /* Table */
+        .table-container {
+            overflow-x: auto;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            border: 1px solid var(--border-light);
+            box-shadow: var(--shadow-lg), var(--shadow-glow);
+            padding: 0.75rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 2px;
+        }
+
+        th,
+        td {
+            padding: 0.5rem 0.3rem;
+            text-align: center;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        th {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            font-weight: 500;
+            font-size: 0.85rem;
+        }
+
+        th.sub-header {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+
+        th.row-header {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-weight: 500;
+            text-align: left;
+            padding-left: 0.75rem;
+        }
+
+        /* Nucleus group headers */
+        .nucleus-group {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)) !important;
+            color: white;
+            font-weight: 500;
+        }
+
+        .nucleus-group.nucleus-e {
+            background: linear-gradient(135deg, #8b5cf6, #a855f7) !important;
+        }
+
+        .nucleus-group.nucleus-a {
+            background: linear-gradient(135deg, #ec4899, #f472b6) !important;
+        }
+
+        /* Visual dividers between nucleus groups */
+        .nucleus-divider {
+            border-left: 3px solid var(--accent-primary) !important;
+        }
+
+        /* Visual dividers between medial groups in full table */
+        .full-table tr.medial-divider-w td {
+            border-top: 3px solid var(--medial-w) !important;
+        }
+
+        .full-table tr.medial-divider-j td {
+            border-top: 3px solid var(--medial-j) !important;
+        }
+
+        .full-table tr.medial-divider-y td {
+            border-top: 3px solid var(--medial-y) !important;
+        }
+
+        /* Medial header with stacked content */
+        .medial-header {
+            min-width: 70px;
+        }
+
+        .medial-stack {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+        }
+
+        .medial-ipa {
+            color: var(--ipa-color);
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .medial-pinyin {
+            color: var(--pinyin-color);
+            font-size: 0.8rem;
+        }
+
+        .medial-zhuyin {
+            color: var(--zhuyin-color);
+            font-size: 1rem;
+        }
+
+        td {
+            background: var(--bg-cell);
+            cursor: pointer;
+            position: relative;
+            vertical-align: middle;
+            font-size: 0.85rem;
+            min-width: 38px;
+        }
+
+        td:hover {
+            background: var(--bg-cell-hover);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        td.empty {
+            background: transparent;
+            cursor: default;
+        }
+
+        td.empty:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        td.highlighted {
+            background: rgba(99, 102, 241, 0.25);
+            border: 2px solid var(--accent-primary);
+        }
+
+        td.playing {
+            animation: pulse 0.4s ease-in-out;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.08);
+                box-shadow: 0 0 15px var(--accent-primary);
+            }
+        }
+
+        /* Cell Content */
+        .cell-content {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            font-size: 0.8rem;
+        }
+
+        .cell-ipa {
+            color: var(--ipa-color);
+            font-family: sans-serif;
+            font-size: 0.75rem;
+        }
+
+        .cell-pinyin {
+            color: var(--pinyin-color);
+            font-weight: 500;
+        }
+
+        .cell-wg {
+            color: #a78bfa;
+            font-size: 0.75rem;
+        }
+
+        .cell-tongyong {
+            color: #f472b6;
+            font-size: 0.8rem;
+        }
+
+        .cell-zhuyin {
+            color: var(--zhuyin-color);
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 1rem;
+        }
+
+        .cell-note {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        body:not(.show-ipa) .cell-ipa {
+            display: none;
+        }
+
+        body:not(.show-pinyin) .cell-pinyin {
+            display: none;
+        }
+
+        body:not(.show-zhuyin) .cell-zhuyin {
+            display: none;
+        }
+
+        body:not(.show-wg) .cell-wg {
+            display: none;
+        }
+
+        body:not(.show-tongyong) .cell-tongyong {
+            display: none;
+        }
+
+        body:not(.show-structure) .cell-structure {
+            display: none;
+        }
+
+        .cell-structure {
+            color: var(--accent-primary);
+            font-family: monospace;
+            font-size: 0.7rem;
+            opacity: 0.8;
+        }
+
+        /* Full table specific */
+        .full-table td {
+            min-width: 42px;
+            padding: 0.4rem 0.2rem;
+        }
+
+        .full-table .syllable {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .full-table td.rare {
+            opacity: 0.6;
+            background: rgba(128, 128, 128, 0.1) !important;
+        }
+
+        .full-table td.rare .cell-pinyin {
+            font-style: italic;
+        }
+
+        .full-table td.rare::before {
+            content: '*';
+            position: absolute;
+            top: 2px;
+            right: 3px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Rare styling for rhyme chart too */
+        #syllableTable td.rare {
+            opacity: 0.6;
+            background: rgba(128, 128, 128, 0.1) !important;
+        }
+
+        #syllableTable td.rare .cell-pinyin {
+            font-style: italic;
+        }
+
+        #syllableTable td.rare::before {
+            content: '*';
+            position: absolute;
+            top: 2px;
+            right: 3px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .full-table .rhyme-cell {
+            background: var(--bg-tertiary);
+            font-weight: 500;
+            color: var(--pinyin-color);
+            min-width: 50px;
+        }
+
+        .full-table .ipa-cell {
+            color: var(--ipa-color);
+            font-size: 0.9rem;
+            font-family: monospace;
+            min-width: 60px;
+        }
+
+        .full-table td[data-medial="w"] {
+            border-left: 3px solid var(--medial-w);
+        }
+
+        .full-table td[data-medial="j"] {
+            border-left: 3px solid var(--medial-j);
+        }
+
+        .full-table td[data-medial="ɥ"] {
+            border-left: 3px solid var(--medial-y);
+        }
+
+        .medial-legend {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-bottom: 1rem;
+            font-size: 0.85rem;
+        }
+
+        .medial-legend span {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .medial-legend .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+
+        .medial-legend .dot.w {
+            background: var(--medial-w);
+        }
+
+        .medial-legend .dot.j {
+            background: var(--medial-j);
+        }
+
+        .medial-legend .dot.y {
+            background: var(--medial-y);
+        }
+
+        /* Hide syllable search in character search tab */
+        body.tab-search-active .search-box {
+            display: none;
+        }
+
+        /* Light mode: improve readability when frequency view is active */
+        [data-theme="light"] .full-table td[style*="background"] .cell-pinyin,
+        [data-theme="light"] .full-table td[style*="background"] .cell-structure,
+        [data-theme="light"] .full-table td[style*="background"] .cell-tongyong,
+        [data-theme="light"] .full-table td[style*="background"] .cell-wg,
+        [data-theme="light"] .full-table td[style*="background"] .cell-zhuyin {
+            color: #1f2937 !important;
+            text-shadow: 0 0 2px rgba(255, 255, 255, 0.5);
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: fixed;
+            padding: 0.75rem 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            box-shadow: var(--shadow-lg);
+            z-index: 1000;
+            max-width: 280px;
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        .tooltip.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .tooltip-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.3rem;
+            color: var(--accent-primary);
+        }
+
+        .tooltip-content {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .tooltip-hint {
+            margin-top: 0.5rem;
+            padding-top: 0.4rem;
+            border-top: 1px solid var(--border-light);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Footnotes */
+        .footnotes {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            border: 1px solid var(--border-light);
+        }
+
+        .footnotes h3 {
+            font-size: 1rem;
+            color: var(--accent-primary);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .footnote {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            padding: 0.5rem;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .footnote-marker {
+            color: var(--accent-secondary);
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        /* Speaking indicator */
+        .speaking-indicator {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            padding: 1rem 1.25rem;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: var(--shadow-lg), 0 0 30px rgba(99, 102, 241, 0.4);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        .speaking-indicator.visible {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        .speaking-content {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .speaking-char {
+            font-size: 2.5rem;
+            font-weight: 500;
+            font-family: 'Noto Sans SC', sans-serif;
+            line-height: 1;
+        }
+
+        .speaking-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        .speaking-pinyin {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .speaking-zhuyin {
+            font-size: 0.95rem;
+            opacity: 0.9;
+        }
+
+        .replay-btn,
+        .close-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 1rem;
+        }
+
+        .replay-btn:hover,
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.35);
+            transform: scale(1.1);
+        }
+
+        .replay-btn:active,
+        .close-btn:active {
+            transform: scale(0.95);
+        }
+
+        .close-btn {
+            font-size: 0.85rem;
+            width: 28px;
+            height: 28px;
+        }
+
+        .speaking-wave {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .speaking-wave span {
+            display: block;
+            width: 3px;
+            height: 16px;
+            background: white;
+            border-radius: 2px;
+            animation: wave 0.5s ease-in-out infinite;
+        }
+
+        .speaking-wave span:nth-child(2) {
+            animation-delay: 0.1s;
+        }
+
+        .speaking-wave span:nth-child(3) {
+            animation-delay: 0.2s;
+        }
+
+        .speaking-wave span:nth-child(4) {
+            animation-delay: 0.3s;
+        }
+
+        @keyframes wave {
+
+            0%,
+            100% {
+                transform: scaleY(0.5);
+            }
+
+            50% {
+                transform: scaleY(1);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            .controls {
+                gap: 0.5rem;
+                padding: 0.75rem;
+            }
+
+            th,
+            td {
+                min-width: 35px;
+                padding: 0.3rem 0.15rem;
+                font-size: 0.7rem;
+            }
+        }
+
+        /* Character Search Tab Styles */
+        .search-section {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .char-search-box {
+            position: relative;
+            margin-bottom: 1.5rem;
+        }
+
+        .char-search-box input {
+            width: 100%;
+            padding: 1rem 1.5rem;
+            font-size: 1.2rem;
+            border: 2px solid var(--border-color);
+            border-radius: 16px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            transition: all 0.3s ease;
+        }
+
+        .char-search-box input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+        }
+
+        .char-search-box .search-hint {
+            display: block;
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        .search-results {
+            min-height: 300px;
+        }
+
+        .search-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        .placeholder-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .placeholder-hint {
+            font-size: 0.85rem;
+            opacity: 0.7;
+        }
+
+        .char-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 1rem;
+        }
+
+        .char-card {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.25rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .char-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+            border-color: var(--accent-primary);
+        }
+
+        .char-card:active {
+            transform: translateY(-2px);
+        }
+
+        .char-card.playing {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-color: transparent;
+        }
+
+        .char-card.playing .char-hanzi,
+        .char-card.playing .char-pinyin,
+        .char-card.playing .char-zhuyin {
+            color: white !important;
+        }
+
+        .char-hanzi {
+            font-size: 2.5rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+
+        .char-pinyin {
+            font-size: 1rem;
+            color: var(--pinyin-color);
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+        }
+
+        .char-zhuyin {
+            font-size: 1rem;
+            color: var(--zhuyin-color);
+        }
+
+        .char-play-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .char-info-btn {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--bg-cell);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            opacity: 0;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .char-info-btn:hover {
+            background: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
+        }
+
+        .char-card:hover .char-play-btn,
+        .char-card:hover .char-info-btn {
+            opacity: 1;
+        }
+
+        .char-structure {
+            font-size: 0.7rem;
+            color: var(--accent-primary);
+            font-family: monospace;
+            margin-bottom: 0.25rem;
+        }
+
+        .char-wg {
+            font-size: 0.8rem;
+            color: #a78bfa;
+        }
+
+        .char-tongyong {
+            font-size: 0.8rem;
+            color: #f472b6;
+        }
+
+        body:not(.show-structure) .char-structure {
+            display: none;
+        }
+
+        body:not(.show-wg) .char-wg {
+            display: none;
+        }
+
+        body:not(.show-tongyong) .char-tongyong {
+            display: none;
+        }
+
+        body:not(.show-pinyin) .char-pinyin {
+            display: none;
+        }
+
+        body:not(.show-zhuyin) .char-zhuyin {
+            display: none;
+        }
+
+        .search-stats {
+            text-align: center;
+            padding: 1rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .load-more-btn {
+            display: block;
+            margin: 1.5rem auto;
+            padding: 0.75rem 2rem;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .load-more-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+        }
+
+        .load-more-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Info button in speaking indicator */
+        .info-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 1rem;
+        }
+
+        .info-btn:hover {
+            background: rgba(255, 255, 255, 0.35);
+            transform: scale(1.1);
+        }
+
+        /* Character Detail Modal */
+        .char-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .char-modal-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .char-modal {
+            background: var(--bg-secondary);
+            border-radius: 20px;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
+            max-width: 800px;
+            width: 95%;
+            max-height: 85vh;
+            overflow-y: auto;
+            position: relative;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+
+        @media (min-width: 768px) {
+            .char-modal {
+                width: 90%;
+            }
+
+            .char-modal-body {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1.5rem;
+            }
+
+            /* Character Info spans full width */
+            .char-modal-body .pron-section:first-child {
+                grid-column: 1 / -1;
+            }
+
+            /* Pronunciations section spans full width */
+            .char-modal-body .pron-section:nth-child(2) {
+                grid-column: 1 / -1;
+            }
+
+            /* Historical + Links side by side */
+            .pron-section .history-timeline {
+                flex-direction: row;
+                flex-wrap: wrap;
+            }
+
+            .pron-section .history-row {
+                flex: 1 1 auto;
+                min-width: fit-content;
+            }
+        }
+
+        .char-modal-overlay.visible .char-modal {
+            transform: scale(1);
+        }
+
+        .char-modal-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: var(--bg-tertiary);
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            transition: all 0.2s ease;
+        }
+
+        .char-modal-close:hover {
+            background: var(--accent-primary);
+            color: white;
+        }
+
+        .char-modal-header {
+            text-align: center;
+            padding: 2rem 2rem 1rem;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .char-modal-char {
+            font-size: 4rem;
+            font-family: 'Noto Sans SC', sans-serif;
+            font-weight: 500;
+            color: var(--text-primary);
+            line-height: 1;
+        }
+
+        .char-modal-forms {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .char-form {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .char-form-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.25rem;
+        }
+
+        .char-form-char {
+            font-size: 5rem;
+            line-height: 1;
+        }
+
+        .char-form-char.simplified {
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+
+        .char-form-char.traditional {
+            font-family: 'Noto Sans TC', sans-serif;
+            color: var(--accent-primary);
+        }
+
+        .char-form-same {
+            text-align: center;
+        }
+
+        .char-same-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+        }
+
+        /* Script form toggle */
+        .script-toggle {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            z-index: 100;
+        }
+
+        .script-toggle-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .script-toggle-switch {
+            display: flex;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border-light);
+        }
+
+        .script-toggle-btn {
+            padding: 0.4rem 0.75rem;
+            font-size: 0.85rem;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .script-toggle-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .script-toggle-btn.active {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+        }
+
+        .script-toggle-btn.simp {
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+
+        .script-toggle-btn.trad {
+            font-family: 'Noto Sans TC', sans-serif;
+        }
+
+        .char-modal-body {
+            padding: 1.5rem 2rem 2rem;
+        }
+
+        .pron-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .pron-section-title {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.75rem;
+        }
+
+        .pron-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            margin-bottom: 0.35rem;
+        }
+
+        .pron-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .pron-play-btn {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border: none;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            color: white;
+            transition: transform 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .pron-play-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .pron-details {
+            flex: 1;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.4rem 0.75rem;
+        }
+
+        .pron-pinyin {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--pinyin-color);
+        }
+
+        .pron-tongyong {
+            font-size: 0.9rem;
+            color: #f472b6;
+        }
+
+        .pron-wg {
+            font-size: 0.9rem;
+            color: #a78bfa;
+        }
+
+        .pron-zhuyin {
+            font-size: 1.1rem;
+            color: var(--zhuyin-color);
+        }
+
+        .pron-freq {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .history-timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .history-row {
+            display: flex;
+            flex-direction: column;
+            padding: 0.75rem;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+        }
+
+        .history-labels {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .history-label-item {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            text-align: center;
+            min-width: 60px;
+        }
+
+        .history-values {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .history-values .history-arrow {
+            margin-top: 0.15rem;
+            /* Align arrow with first row of values */
+        }
+
+        .history-stage {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 60px;
+        }
+
+        .stage-label {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .stage-value {
+            font-size: 0.9rem;
+            font-family: monospace;
+        }
+
+        .stage-value.oc {
+            color: #f59e0b;
+        }
+
+        .stage-value.mc {
+            color: #8b5cf6;
+        }
+
+        .stage-value.mandarin {
+            color: var(--pinyin-color);
+        }
+
+        .stage-struct {
+            font-size: 0.9rem;
+            color: var(--accent-primary);
+            font-family: monospace;
+            opacity: 0.8;
+        }
+
+        .history-arrow {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .history-gloss {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-style: italic;
+            text-align: center;
+            margin-top: 0.5rem;
+        }
+
+        .pron-struct {
+            font-size: 0.8rem;
+            color: var(--accent-primary);
+            font-family: monospace;
+            background: var(--bg-cell);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+        }
+
+        .info-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.35rem 0.6rem;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+        }
+
+        .info-item.copy-char {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .info-item.copy-char:hover {
+            background: var(--accent-primary);
+        }
+
+        .info-item.copy-char:hover .info-label,
+        .info-item.copy-char:hover .info-value {
+            color: white;
+        }
+
+        .info-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .info-value {
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            font-family: monospace;
+        }
+
+        .stroke-order-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+
+        .stroke-order-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .stroke-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stroke-order-container {
+            display: flex;
+            justify-content: center;
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            min-height: 120px;
+            align-items: center;
+        }
+
+        .stroke-order-img {
+            width: 120px;
+            height: 120px;
+            border-radius: 8px;
+        }
+
+        .stroke-error {
+            color: var(--text-muted);
+            font-style: italic;
+            font-size: 0.85rem;
+        }
+
+        .external-links-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+
+        .link-category {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .link-cat-title {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .link-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .link-list .external-link {
+            padding: 0.4rem 0.75rem;
+            font-size: 0.85rem;
+        }
+
+        .external-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1rem;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            color: var(--text-primary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+
+        .external-link:hover {
+            background: var(--accent-primary);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-muted);
+        }
+
+        .no-results-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+
+<body class="show-ipa show-pinyin show-zhuyin">
+    <div class="container">
+        <header>
+            <h1 id="pageTitle">汉语拼音音节表</h1>
+            <p class="subtitle">Chinese Syllable Charts - Interactive Phonetics Explorer</p>
+            <button class="theme-toggle" id="themeToggle" title="Toggle theme"></button>
+            <div class="script-toggle">
+                <span class="script-toggle-label">Script:</span>
+                <div class="script-toggle-switch">
+                    <button class="script-toggle-btn simp active" id="scriptSimp" title="Simplified Chinese">简</button>
+                    <button class="script-toggle-btn trad" id="scriptTrad" title="Traditional Chinese">繁</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="rhyme" id="tabRhyme">Rhyme Chart (<span
+                    class="tab-cn">韵母表</span>)</button>
+            <button class="tab-btn" data-tab="full" id="tabFull">Full Syllable Chart (<span
+                    class="tab-cn">音节全表</span>)</button>
+            <button class="tab-btn" data-tab="search" id="tabSearch">Character Search (<span
+                    class="tab-cn">字典</span>)</button>
+        </div>
+
+        <div class="controls">
+            <div class="search-box">
+                <input type="text" id="search" placeholder="Search syllables...">
+            </div>
+            <div class="toggle-group">
+                <button class="toggle-btn" data-toggle="structure"><span class="dot"
+                        style="background:var(--accent-primary);width:8px;height:8px;border-radius:50%;"></span>
+                    Structure</button>
+                <button class="toggle-btn active" data-toggle="pinyin"><span class="dot"
+                        style="background:var(--pinyin-color);width:8px;height:8px;border-radius:50%;"></span>
+                    Pinyin</button>
+                <button class="toggle-btn" data-toggle="wg"><span class="dot"
+                        style="background:#a78bfa;width:8px;height:8px;border-radius:50%;"></span>
+                    Wade-Giles</button>
+                <button class="toggle-btn" data-toggle="tongyong"><span class="dot"
+                        style="background:#f472b6;width:8px;height:8px;border-radius:50%;"></span>
+                    Tongyong</button>
+                <button class="toggle-btn active" data-toggle="zhuyin"><span class="dot"
+                        style="background:var(--zhuyin-color);width:8px;height:8px;border-radius:50%;"></span>
+                    Zhuyin</button>
+                <button class="toggle-btn active" data-toggle="ipa"><span class="dot"
+                        style="background:var(--ipa-color);width:8px;height:8px;border-radius:50%;"></span> IPA</button>
+            </div>
+            <button class="toggle-btn" id="freqToggle">📊 Frequency</button>
+        </div>
+
+        <!-- Tab 1: Rhyme Chart -->
+        <div class="tab-content active" id="tab-rhyme">
+            <div class="medial-legend">
+                <span><span class="dot" style="background:var(--text-muted);"></span><em
+                        style="font-size:0.8em;">rare*</em></span>
+                <span style="margin-left:1rem;color:var(--text-muted);">💡 Click any syllable to hear it</span>
+            </div>
+            <div class="table-container">
+                <table id="syllableTable"></table>
+            </div>
+            <div class="footnotes">
+                <h3>📝 Notes</h3>
+                <div class="footnote"><span class="footnote-marker">ê</span><span>《汉语拼音方案》 defines ㄝ (/ɛ/) which
+                        typically only occurs with initial glides. When without, it's romanized as ê to distinguish from
+                        ㄜ (-e /ɤ/).</span></div>
+                <div class="footnote"><span class="footnote-marker">-r</span><span>erhua - the r-colored vowel suffix in
+                        Mandarin</span></div>
+                <div class="footnote"><span class="footnote-marker">①</span><span>No overlap between medial and coda: no
+                        iai, uau, üai, üau</span></div>
+                <div class="footnote"><span class="footnote-marker">②</span><span>j, q, x are palatal allophones of z,
+                        c, s</span></div>
+            </div>
+        </div>
+
+        <!-- Tab 2: Full Syllable Chart -->
+        <div class="tab-content" id="tab-full">
+            <div class="medial-legend">
+                <span><span class="dot w"></span> /w/ medial</span>
+                <span><span class="dot j"></span> /j/ medial</span>
+                <span><span class="dot y"></span> /ɥ/ medial</span>
+                <span><span class="dot" style="background:var(--text-muted);"></span><em
+                        style="font-size:0.8em;">rare*</em></span>
+                <span style="margin-left:1rem;color:var(--text-muted);">💡 Click any syllable to hear it</span>
+            </div>
+            <div class="table-container">
+                <table id="fullTable" class="full-table"></table>
+            </div>
+        </div>
+
+        <!-- Tab 3: Character Search -->
+        <div class="tab-content" id="tab-search">
+            <div class="search-section">
+                <div class="char-search-box">
+                    <input type="text" id="charSearch" placeholder="Search by character, pinyin, or zhuyin..."
+                        autocomplete="off">
+                    <span class="search-hint">Try: 你, ni, ㄋㄧ, hao, 好...</span>
+                </div>
+                <div class="search-results" id="searchResults">
+                    <div class="search-placeholder">
+                        <span class="placeholder-icon">🔍</span>
+                        <p>Enter a character, pinyin (with or without tones), or zhuyin to search</p>
+                        <p class="placeholder-hint">Results will show matching characters with pronunciation</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip">
+        <div class="tooltip-title"></div>
+        <div class="tooltip-content"></div>
+        <div class="tooltip-hint">Click to hear pronunciation</div>
+    </div>
+
+    <div class="speaking-indicator" id="speakingIndicator">
+        <div class="speaking-content">
+            <span class="speaking-char" id="speakingChar"></span>
+            <div class="speaking-info">
+                <span class="speaking-pinyin" id="speakingPinyin"></span>
+                <span class="speaking-zhuyin" id="speakingZhuyin"></span>
+            </div>
+        </div>
+        <button class="replay-btn" id="replayBtn" title="Play again">🔊</button>
+        <button class="info-btn" id="charInfoBtn" title="Character details">ℹ️</button>
+        <button class="close-btn" id="closeIndicator" title="Close">✕</button>
+    </div>
+
+    <!-- Character Detail Modal -->
+    <div class="char-modal-overlay" id="charModalOverlay">
+        <div class="char-modal">
+            <button class="char-modal-close" id="charModalClose">✕</button>
+            <div class="char-modal-header">
+                <div id="charModalHeader"></div>
+            </div>
+            <div class="char-modal-body" id="charModalBody">
+                <!-- Content populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Rhyme chart data - fixed structure
+        const syllableData = {
+            // nucleus groups: ə (cols 0-4), a (cols 5-9), special (cols 10-13)
+            headers: {
+                nucleus: ['∅', '/ə/', '', '', '', '/a/', '', '', '', '', '/ɨ/', '/ɚ/', '/e/', '/o/'],
+                coda: ['∅', '∅', '/i/', '/u/', '/n/', '/ŋ/', '∅', '/i/', '/u/', '/n/', '/ŋ/', '∅', '?', '∅', '∅']
+            },
+            nucleusGroups: [
+                { start: 0, end: 0, label: '∅' },
+                { start: 1, end: 5, label: '/ə/' },
+                { start: 6, end: 10, label: '/a/' },
+                { start: 11, end: 14, label: 'other' }
+            ],
+            rows: [
+                {
+                    medial: '∅',
+                    medialDisplay: { ipa: '', pinyin: '', zhuyin: '' },
+                    cells: [
+                        null, // ∅/∅
+                        { ipa: '[ɤ]', pinyin: 'e', zhuyin: 'ㄜ' }, // ə/∅
+                        { ipa: '[ei̯]', pinyin: 'ei', zhuyin: 'ㄟ' }, // ə/i
+                        { ipa: '[ou̯]', pinyin: 'ou', zhuyin: 'ㄡ' }, // ə/u
+                        { ipa: '[ən]', pinyin: 'en', zhuyin: 'ㄣ' }, // ə/n
+                        { ipa: '[əŋ]', pinyin: 'eng', zhuyin: 'ㄥ' }, // ə/ŋ
+                        { ipa: '[a]', pinyin: 'a', zhuyin: 'ㄚ' }, // a/∅
+                        { ipa: '[ai̯]', pinyin: 'ai', zhuyin: 'ㄞ' }, // a/i
+                        { ipa: '[au̯]', pinyin: 'ao', zhuyin: 'ㄠ' }, // a/u
+                        { ipa: '[an]', pinyin: 'an', zhuyin: 'ㄢ' }, // a/n
+                        { ipa: '[aŋ]', pinyin: 'ang', zhuyin: 'ㄤ' }, // a/ŋ
+                        { ipa: '[ɹ̩~ɻ̩]', pinyin: '-i', zhuyin: 'ㄭ' }, // ɨ/∅
+                        { ipa: '[ɚ]', pinyin: '-er', zhuyin: 'ㄦ' }, // ɚ/?
+                        { ipa: '[ɛ]', pinyin: 'ê', zhuyin: 'ㄝ' }, // e/∅
+                        { ipa: '[ɔ]', pinyin: 'o', zhuyin: 'ㄛ' } // o/∅
+                    ]
+                },
+                {
+                    medial: '/j/',
+                    medialDisplay: { ipa: '[i]', pinyin: 'yi\n-i', zhuyin: 'ㄧ' },
+                    cells: [
+                        { ipa: '[i]', pinyin: 'yi', zhuyin: 'ㄧ' }, // ∅/∅
+                        { ipa: '[je]', pinyin: 'ye', zhuyin: 'ㄧㄝ' }, // ə/∅
+                        null, // ə/i
+                        { ipa: '[jou̯]', pinyin: 'you', zhuyin: 'ㄧㄡ' }, // ə/u
+                        { ipa: '[in]', pinyin: 'yin', zhuyin: 'ㄧㄣ' }, // ə/n
+                        { ipa: '[iŋ]', pinyin: 'ying', zhuyin: 'ㄧㄥ' }, // ə/ŋ
+                        { ipa: '[ja]', pinyin: 'ya', zhuyin: 'ㄧㄚ' }, // a/∅
+                        { ipa: '[jai̯]', pinyin: 'yai', zhuyin: 'ㄧㄞ', note: 'rare' }, // a/i
+                        { ipa: '[jau̯]', pinyin: 'yao', zhuyin: 'ㄧㄠ' }, // a/u
+                        { ipa: '[jɛn]', pinyin: 'yan', zhuyin: 'ㄧㄢ' }, // a/n
+                        { ipa: '[jaŋ]', pinyin: 'yang', zhuyin: 'ㄧㄤ' }, // a/ŋ
+                        null, // ɨ/∅
+                        null, // ɚ/?
+                        null, // e/∅
+                        { ipa: '[jɔ]', pinyin: 'yo/-io', zhuyin: 'ㄧㄛ' } // o/∅
+                    ]
+                },
+                {
+                    medial: '/w/',
+                    medialDisplay: { ipa: '[u]', pinyin: 'wu\n-u', zhuyin: 'ㄨ' },
+                    cells: [
+                        { ipa: '[u]', pinyin: 'wu', zhuyin: 'ㄨ' }, // ∅/∅
+                        { ipa: '[wo]', pinyin: 'wo', zhuyin: 'ㄨㄛ' }, // ə/∅
+                        { ipa: '[wei̯]', pinyin: 'wei', zhuyin: 'ㄨㄟ' }, // ə/i
+                        null, // ə/u
+                        { ipa: '[wən]', pinyin: 'wen', zhuyin: 'ㄨㄣ' }, // ə/n
+                        { ipa: '[wəŋ], [ʊŋ]', pinyin: 'weng', zhuyin: 'ㄨㄥ' }, // ə/ŋ
+                        { ipa: '[wa]', pinyin: 'wa', zhuyin: 'ㄨㄚ' }, // a/∅
+                        { ipa: '[wai̯]', pinyin: 'wai', zhuyin: 'ㄨㄞ' }, // a/i
+                        null, // a/u
+                        { ipa: '[wan]', pinyin: 'wan', zhuyin: 'ㄨㄢ' }, // a/n
+                        { ipa: '[waŋ]', pinyin: 'wang', zhuyin: 'ㄨㄤ' }, // a/ŋ
+                        null, null, null, null // special
+                    ]
+                },
+                {
+                    medial: '/ɥ/',
+                    medialDisplay: { ipa: '[y]', pinyin: 'yu\n-ü', zhuyin: 'ㄩ' },
+                    cells: [
+                        { ipa: '[y]', pinyin: 'yu', zhuyin: 'ㄩ' }, // ∅/∅
+                        { ipa: '[ɥe]', pinyin: 'yue', zhuyin: 'ㄩㄝ' }, // ə/∅
+                        null, // ə/i
+                        null, // ə/u
+                        { ipa: '[yn]', pinyin: 'yun', zhuyin: 'ㄩㄣ' }, // ə/n
+                        { ipa: '[jʊŋ]', pinyin: 'yong', zhuyin: 'ㄩㄥ' }, // ə/ŋ
+                        null, // a/∅
+                        null, // a/i
+                        null, // a/u
+                        { ipa: '[ɥɛn]', pinyin: 'yuan', zhuyin: 'ㄩㄢ' }, // a/n
+                        null, // a/ŋ
+                        null, null, null, null // special
+                    ]
+                }
+            ]
+        };
+
+        // Full syllable data
+        const fullData = {
+            onsets: ['∅', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h', 'j', 'q', 'x', 'zh', 'ch', 'sh', 'r', 'z', 'c', 's'],
+            rows: [
+                { medial: '∅', vowel: 'o', coda: '∅', ipa: '[o]', rhyme: 'o', cells: ['o', '', '', '', '', '', '', '', 'lo', '', '', '', '', '', '', '', '', '', '', '', '', ''] },
+                { medial: '∅', vowel: 'e', coda: '∅', ipa: '[e]', rhyme: 'ê', cells: ['ê', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''] },
+                { medial: '∅', vowel: 'ɚ', coda: '∅', ipa: '[ɚ]', rhyme: 'er', cells: ['er', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''] },
+                { medial: '∅', vowel: 'ɨ', coda: '∅', ipa: '[ɹ̩~ɻ̩]', rhyme: '-i', cells: ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'zhi', 'chi', 'shi', 'ri', 'zi', 'ci', 'si'] },
+                { medial: '∅', vowel: 'a', coda: '∅', ipa: '[a]', rhyme: 'a', cells: ['a', 'ba', 'pa', 'ma', 'fa', 'da', 'ta', 'na', 'la', 'ga', 'ka', 'ha', '', '', '', 'zha', 'cha', 'sha', '', 'za', 'ca', 'sa'] },
+                { medial: '∅', vowel: 'ə', coda: '∅', ipa: '[ɤ]', rhyme: 'e', cells: ['e', '', '', 'me', '', 'de', 'te', 'ne', 'le', 'ge', 'ke', 'he', '', '', '', 'zhe', 'che', 'she', 're', 'ze', 'ce', 'se'] },
+                { medial: '∅', vowel: 'a', coda: 'j', ipa: '[ai̯]', rhyme: 'ai', cells: ['ai', 'bai', 'pai', 'mai', 'fai', 'dai', 'tai', 'nai', 'lai', 'gai', 'kai', 'hai', '', '', '', 'zhai', 'chai', 'shai', '', 'zai', 'cai', 'sai'] },
+                { medial: '∅', vowel: 'ə', coda: 'j', ipa: '[ei̯]', rhyme: 'ei', cells: ['ei', 'bei', 'pei', 'mei', 'fei', 'dei', 'tei', 'nei', 'lei', 'gei', 'kei', 'hei', '', '', '', 'zhei', '', 'shei', '', 'zei', 'cei', 'sei'] },
+                { medial: '∅', vowel: 'a', coda: 'w', ipa: '[au̯]', rhyme: 'ao', cells: ['ao', 'bao', 'pao', 'mao', '', 'dao', 'tao', 'nao', 'lao', 'gao', 'kao', 'hao', '', '', '', 'zhao', 'chao', 'shao', 'rao', 'zao', 'cao', 'sao'] },
+                { medial: '∅', vowel: 'ə', coda: 'w', ipa: '[ou̯]', rhyme: 'ou', cells: ['ou', '', 'pou', 'mou', 'fou', 'dou', 'tou', 'nou', 'lou', 'gou', 'kou', 'hou', '', '', '', 'zhou', 'chou', 'shou', 'rou', 'zou', 'cou', 'sou'] },
+                { medial: '∅', vowel: 'a', coda: 'n', ipa: '[an]', rhyme: 'an', cells: ['an', 'ban', 'pan', 'man', 'fan', 'dan', 'tan', 'nan', 'lan', 'gan', 'kan', 'han', '', '', '', 'zhan', 'chan', 'shan', 'ran', 'zan', 'can', 'san'] },
+                { medial: '∅', vowel: 'ə', coda: 'n', ipa: '[ən]', rhyme: 'en', cells: ['en', 'ben', 'pen', 'men', 'fen', 'den', '', 'nen', 'len', 'gen', 'ken', 'hen', '', '', '', 'zhen', 'chen', 'shen', 'ren', 'zen', 'cen', 'sen'] },
+                { medial: '∅', vowel: 'a', coda: 'ŋ', ipa: '[aŋ]', rhyme: 'ang', cells: ['ang', 'bang', 'pang', 'mang', 'fang', 'dang', 'tang', 'nang', 'lang', 'gang', 'kang', 'hang', '', '', '', 'zhang', 'chang', 'shang', 'rang', 'zang', 'cang', 'sang'] },
+                { medial: '∅', vowel: 'ə', coda: 'ŋ', ipa: '[əŋ]', rhyme: 'eng', cells: ['eng', 'beng', 'peng', 'meng', 'feng', 'deng', 'teng', 'neng', 'leng', 'geng', 'keng', 'heng', '', '', '', 'zheng', 'cheng', 'sheng', 'reng', 'zeng', 'ceng', 'seng'] },
+                { medial: 'w', vowel: '∅', coda: '∅', ipa: '[u]', rhyme: 'u', cells: ['wu', 'bu', 'pu', 'mu', 'fu', 'du', 'tu', 'nu', 'lu', 'gu', 'ku', 'hu', '', '', '', 'zhu', 'chu', 'shu', 'ru', 'zu', 'cu', 'su'] },
+                { medial: 'w', vowel: 'a', coda: '∅', ipa: '[wa]', rhyme: 'ua', cells: ['wa', '', '', '', '', '', '', '', '', 'gua', 'kua', 'hua', '', '', '', 'zhua', 'chua', 'shua', 'rua', '', '', ''] },
+                { medial: 'w', vowel: 'ə', coda: '∅', ipa: '[wo]', rhyme: 'uo', cells: ['wo', 'bo', 'po', 'mo', 'fo', 'duo', 'tuo', 'nuo', 'luo', 'guo', 'kuo', 'huo', '', '', '', 'zhuo', 'chuo', 'shuo', 'ruo', 'zuo', 'cuo', 'suo'] },
+                { medial: 'w', vowel: 'a', coda: 'j', ipa: '[wai̯]', rhyme: 'uai', cells: ['wai', '', '', '', '', '', '', '', '', 'guai', 'kuai', 'huai', '', '', '', 'zhuai', 'chuai', 'shuai', '', '', '', ''] },
+                { medial: 'w', vowel: 'ə', coda: 'j', ipa: '[wei̯]', rhyme: 'ui', cells: ['wei', '', '', '', '', 'dui', 'tui', 'nui', '', 'gui', 'kui', 'hui', '', '', '', 'zhui', 'chui', 'shui', 'rui', 'zui', 'cui', 'sui'] },
+                { medial: 'w', vowel: 'a', coda: 'n', ipa: '[wan]', rhyme: 'uan', cells: ['wan', '', '', '', '', 'duan', 'tuan', 'nuan', 'luan', 'guan', 'kuan', 'huan', '', '', '', 'zhuan', 'chuan', 'shuan', 'ruan', 'zuan', 'cuan', 'suan'] },
+                { medial: 'w', vowel: 'ə', coda: 'n', ipa: '[wən]', rhyme: 'un', cells: ['wen', '', 'pun', '', '', 'dun', 'tun', 'nun', 'lun', 'gun', 'kun', 'hun', '', '', '', 'zhun', 'chun', 'shun', 'run', 'zun', 'cun', 'sun'] },
+                { medial: 'w', vowel: 'a', coda: 'ŋ', ipa: '[waŋ]', rhyme: 'uang', cells: ['wang', '', '', '', '', 'duang', '', '', '', 'guang', 'kuang', 'huang', '', '', '', 'zhuang', 'chuang', 'shuang', '', '', '', ''] },
+                { medial: 'w', vowel: 'ə', coda: 'ŋ', ipa: '[wəŋ]/[ʊŋ]', rhyme: 'ong', cells: ['weng', '', '', '', '', 'dong', 'tong', 'nong', 'long', 'gong', 'kong', 'hong', '', '', '', 'zhong', 'chong', 'shong', 'rong', 'zong', 'cong', 'song'] },
+                { medial: 'j', vowel: '∅', coda: '∅', ipa: '[i]', rhyme: 'i', cells: ['yi', 'bi', 'pi', 'mi', '', 'di', 'ti', 'ni', 'li', '', '', '', 'ji', 'qi', 'xi', '', '', '', '', '', '', ''] },
+                { medial: 'j', vowel: 'o', coda: '∅', ipa: '[jo]', rhyme: 'io', cells: ['yo', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''] },
+                { medial: 'j', vowel: 'a', coda: '∅', ipa: '[ja]', rhyme: 'ia', cells: ['ya', '', 'pia', '', '', 'dia', '', 'nia', 'lia', '', '', '', 'jia', 'qia', 'xia', '', '', '', '', '', '', ''] },
+                { medial: 'j', vowel: 'ə', coda: '∅', ipa: '[je]', rhyme: 'ie', cells: ['ye', 'bie', 'pie', 'mie', '', 'die', 'tie', 'nie', 'lie', '', '', '', 'jie', 'qie', 'xie', '', '', '', '', '', '', ''] },
+                { medial: 'j', vowel: 'a', coda: 'w', ipa: '[jau̯]', rhyme: 'iao', cells: ['yao', 'biao', 'piao', 'miao', 'fiao', 'diao', 'tiao', 'niao', 'liao', '', '', '', 'jiao', 'qiao', 'xiao', '', '', '', '', '', '', ''] },
+                { medial: 'j', vowel: 'ə', coda: 'w', ipa: '[jou̯]', rhyme: 'iu', cells: ['you', '', '', 'miu', '', 'diu', '', 'niu', 'liu', '', 'kiu', '', 'jiu', 'qiu', 'xiu', '', '', '', '', '', '', ''] },
+                { medial: 'j', vowel: 'a', coda: 'n', ipa: '[jɛn]', rhyme: 'ian', cells: ['yan', 'bian', 'pian', 'mian', '', 'dian', 'tian', 'nian', 'lian', '', '', '', 'jian', 'qian', 'xian', '', '', '', '', '', '', ''] },
+                { medial: 'j', vowel: 'ə', coda: 'n', ipa: '[in]', rhyme: 'in', cells: ['yin', 'bin', 'pin', 'min', '', 'din', '', 'nin', 'lin', 'gin', '', '', 'jin', 'qin', 'xin', '', '', '', '', '', '', ''] },
+                { medial: 'j', vowel: 'a', coda: 'ŋ', ipa: '[jaŋ]', rhyme: 'iang', cells: ['yang', 'biang', '', '', '', 'diang', '', 'niang', 'liang', '', 'kiang', '', 'jiang', 'qiang', 'xiang', '', '', '', '', '', '', ''] },
+                { medial: 'j', vowel: 'ə', coda: 'ŋ', ipa: '[iŋ]', rhyme: 'ing', cells: ['ying', 'bing', 'ping', 'ming', '', 'ding', 'ting', 'ning', 'ling', 'ging', '', '', 'jing', 'qing', 'xing', '', '', '', '', '', '', ''] },
+                { medial: 'ɥ', vowel: '∅', coda: '∅', ipa: '[y]', rhyme: 'ü', cells: ['yu', '', '', '', '', '', '', 'nü', 'lü', '', '', '', 'ju', 'qu', 'xu', '', '', '', '', '', '', ''] },
+                { medial: 'ɥ', vowel: 'ə', coda: '∅', ipa: '[ɥe]', rhyme: 'üe', cells: ['yue', '', '', '', '', '', '', 'nüe', 'lüe', '', '', '', 'jue', 'que', 'xue', '', '', '', '', '', '', ''] },
+                { medial: 'ɥ', vowel: 'a', coda: 'n', ipa: '[ɥɛn]', rhyme: 'üan', cells: ['yuan', '', '', '', '', '', '', '', 'lüan', '', '', '', 'juan', 'quan', 'xuan', '', '', '', '', '', '', ''] },
+                { medial: 'ɥ', vowel: 'ə', coda: 'n', ipa: '[yn]', rhyme: 'ün', cells: ['yun', '', '', '', '', '', '', '', 'lün', '', '', '', 'jun', 'qun', 'xun', '', '', '', '', '', '', ''] },
+                { medial: 'ɥ', vowel: 'ə', coda: 'ŋ', ipa: '[jʊŋ]', rhyme: 'iong', cells: ['yong', '', '', '', '', '', '', '', '', '', '', '', 'jiong', 'qiong', 'xiong', '', '', '', '', '', '', ''] }
+            ]
+        };
+
+        const table = document.getElementById('syllableTable');
+        const fullTable = document.getElementById('fullTable');
+        const tooltip = document.getElementById('tooltip');
+        const tooltipTitle = tooltip.querySelector('.tooltip-title');
+        const tooltipContent = tooltip.querySelector('.tooltip-content');
+        const searchInput = document.getElementById('search');
+        const speakingIndicator = document.getElementById('speakingIndicator');
+        const speakingChar = document.getElementById('speakingChar');
+        const speakingPinyin = document.getElementById('speakingPinyin');
+        const speakingZhuyin = document.getElementById('speakingZhuyin');
+        const replayBtn = document.getElementById('replayBtn');
+        const closeIndicator = document.getElementById('closeIndicator');
+
+        // Store current speaking data for replay
+        let currentSpeakData = { char: '', pinyin: '', zhuyin: '' };
+
+        // Replay button handler
+        replayBtn.addEventListener('click', () => {
+            if (currentSpeakData.char) {
+                speakChar(currentSpeakData.char, currentSpeakData.pinyin, currentSpeakData.zhuyin);
+            }
+        });
+
+        // Close button handler
+        closeIndicator.addEventListener('click', () => {
+            speechSynthesis.cancel();
+            speakingIndicator.classList.remove('visible');
+        });
+
+        // Common speech function
+        function speakChar(char, pinyin, zhuyin) {
+            if ('speechSynthesis' in window) {
+                const u = new SpeechSynthesisUtterance(char);
+                u.lang = 'zh-CN';
+                u.rate = 0.8;
+                speechSynthesis.cancel();
+                speechSynthesis.speak(u);
+            }
+        }
+
+        // Update and show the speaking indicator
+        function showSpeakingIndicator(char, pinyin, zhuyin) {
+            // Find all pronunciations for this character
+            const allPronunciations = characterData.filter(e => e.char === char);
+
+            let displayPinyin, displayZhuyin;
+            if (allPronunciations.length > 1) {
+                // Multiple pronunciations - show all with proper zhuyin formatting
+                displayPinyin = allPronunciations.map(p => p.pinyin).join(' / ');
+                displayZhuyin = allPronunciations.map(p => {
+                    const toneNum = getToneNumber(p.pinyin);
+                    let z = p.zhuyin || '';
+                    if (toneNum === '5' && z) z = '˙' + z.replace(/[ˊˇˋ˙]/g, '');
+                    return z;
+                }).filter(z => z).join(' / ');
+            } else if (allPronunciations.length === 1) {
+                // Single pronunciation from data
+                displayPinyin = allPronunciations[0].pinyin;
+                const toneNum = getToneNumber(allPronunciations[0].pinyin);
+                let z = allPronunciations[0].zhuyin || '';
+                if (toneNum === '5' && z) z = '˙' + z.replace(/[ˊˇˋ˙]/g, '');
+                displayZhuyin = z;
+            } else {
+                // No data found, use provided values
+                displayPinyin = pinyin;
+                displayZhuyin = zhuyin || '';
+            }
+
+            currentSpeakData = { char, pinyin: displayPinyin, zhuyin: displayZhuyin };
+            // Display in preferred script (function defined later, but called at runtime)
+            speakingChar.textContent = typeof toPreferredScript === 'function' ? toPreferredScript(char) : char;
+            speakingPinyin.textContent = displayPinyin;
+            speakingZhuyin.textContent = displayZhuyin;
+            speakingIndicator.classList.add('visible');
+            speakChar(char, pinyin, zhuyin);
+        }
+
+        function buildRhymeTable() {
+            const codas = ['∅', '∅', '/i/', '/u/', '/n/', '/ŋ/', '∅', '/i/', '/u/', '/n/', '/ŋ/', '∅', '?', '∅', '∅'];
+            // Column groups: col 0 = ∅, cols 1-5 = ə, cols 6-10 = a, cols 11-14 = special
+            let html = '<thead>';
+            html += '<tr><th rowspan="2" class="row-header">Medial</th>';
+            html += '<th colspan="1" class="nucleus-group">∅</th>';
+            html += '<th colspan="5" class="nucleus-group nucleus-e">/ə/</th>';
+            html += '<th colspan="5" class="nucleus-group nucleus-a">/a/</th>';
+            html += '<th colspan="4" class="nucleus-group">other</th>';
+            html += '</tr><tr>';
+            codas.forEach((c, i) => {
+                let dividerClass = (i === 1 || i === 6 || i === 11) ? ' nucleus-divider' : '';
+                html += `<th class="sub-header${dividerClass}">${c}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            syllableData.rows.forEach((row, ri) => {
+                html += '<tr>';
+                html += `<th class="row-header medial-header" style="text-align:center;">${row.medial}</th>`;
+                const codas = ['∅', '∅', 'i', 'u', 'n', 'ŋ', '∅', 'i', 'u', 'n', 'ŋ', '∅', '?', '∅', '∅'];
+                row.cells.forEach((cell, ci) => {
+                    let dividerClass = (ci === 1 || ci === 6 || ci === 11) ? ' nucleus-divider' : '';
+                    if (cell) {
+                        // Compute structure
+                        let vowelPart = '∅';
+                        if (ci >= 1 && ci <= 5) vowelPart = 'ə';
+                        else if (ci >= 6 && ci <= 10) vowelPart = 'a';
+                        else if (ci === 11) vowelPart = 'ɨ';
+                        else if (ci === 12) vowelPart = 'ɚ';
+                        else if (ci === 13) vowelPart = 'e';
+                        else if (ci === 14) vowelPart = 'o';
+                        const codaPart = codas[ci] || '∅';
+                        const structure = `${row.medial.replace(/\//g, '')}-${vowelPart}-${codaPart}`;
+                        const basePinyin = cell.pinyin?.split('/')[0]?.replace(/[*-]/g, '').trim();
+                        const isRare = cell.note === 'rare'; // Only mark as rare if explicitly noted (e.g., yai)
+
+                        html += `<td class="${dividerClass}${isRare ? ' rare' : ''}" data-ipa="${cell.ipa || ''}" data-pinyin="${cell.pinyin || ''}" data-zhuyin="${cell.zhuyin || ''}" data-row="${ri}" data-col="${ci}">
+                            <div class="cell-content"><span class="cell-structure">${structure}</span><span class="cell-pinyin">${cell.pinyin || ''}</span><span class="cell-tongyong">${pinyinToTongyong[basePinyin] || ''}</span><span class="cell-wg">${pinyinToWadeGiles[basePinyin] || ''}</span><span class="cell-zhuyin">${cell.zhuyin || ''}</span><span class="cell-ipa">${cell.ipa || ''}</span></div></td>`;
+                    } else {
+                        html += `<td class="empty${dividerClass}"></td>`;
+                    }
+                });
+                html += '</tr>';
+            });
+            html += '</tbody>';
+            table.innerHTML = html;
+            addCellListeners(table);
+        }
+
+
+        // Onset IPA mapping
+        const onsetIPA = {
+            '∅': '', 'b': '/p/', 'p': '/pʰ/', 'm': '/m/', 'f': '/f/',
+            'd': '/t/', 't': '/tʰ/', 'n': '/n/', 'l': '/l/',
+            'g': '/k/', 'k': '/kʰ/', 'h': '/x/',
+            'j': '/tɕ/', 'q': '/tɕʰ/', 'x': '/ɕ/',
+            'zh': '/ʈʂ/', 'ch': '/ʈʂʰ/', 'sh': '/ʂ/', 'r': '/ɻ/',
+            'z': '/ts/', 'c': '/tsʰ/', 's': '/s/'
+        };
+
+        // Onset Zhuyin mapping
+        const onsetZhuyin = {
+            '∅': '', 'b': 'ㄅ', 'p': 'ㄆ', 'm': 'ㄇ', 'f': 'ㄈ',
+            'd': 'ㄉ', 't': 'ㄊ', 'n': 'ㄋ', 'l': 'ㄌ',
+            'g': 'ㄍ', 'k': 'ㄎ', 'h': 'ㄏ',
+            'j': 'ㄐ', 'q': 'ㄑ', 'x': 'ㄒ',
+            'zh': 'ㄓ', 'ch': 'ㄔ', 'sh': 'ㄕ', 'r': 'ㄖ',
+            'z': 'ㄗ', 'c': 'ㄘ', 's': 'ㄙ'
+        };
+
+        // Rhyme to Zhuyin mapping (single source of truth)
+        const rhymeZhuyin = {
+            'o': 'ㄛ', 'ê': 'ㄝ', 'er': 'ㄦ', '-i': 'ㄭ', 'a': 'ㄚ', 'e': 'ㄜ',
+            'ai': 'ㄞ', 'ei': 'ㄟ', 'ao': 'ㄠ', 'ou': 'ㄡ', 'an': 'ㄢ', 'en': 'ㄣ', 'ang': 'ㄤ', 'eng': 'ㄥ',
+            'u': 'ㄨ', 'ua': 'ㄨㄚ', 'uo': 'ㄨㄛ', 'uai': 'ㄨㄞ', 'ui': 'ㄨㄟ', 'uan': 'ㄨㄢ', 'un': 'ㄨㄣ', 'uang': 'ㄨㄤ', 'ong': 'ㄨㄥ',
+            'i': 'ㄧ', 'io': 'ㄧㄛ', 'ia': 'ㄧㄚ', 'ie': 'ㄧㄝ', 'iao': 'ㄧㄠ', 'iu': 'ㄧㄡ', 'ian': 'ㄧㄢ', 'in': 'ㄧㄣ', 'iang': 'ㄧㄤ', 'ing': 'ㄧㄥ',
+            'ü': 'ㄩ', 'üe': 'ㄩㄝ', 'üan': 'ㄩㄢ', 'ün': 'ㄩㄣ', 'iong': 'ㄩㄥ'
+        };
+
+        function buildFullTable() {
+            let html = '<thead><tr><th>Medial</th><th>Vowel</th><th>Coda</th><th>Rhyme</th>';
+            // Single header row with IPA, pinyin, and zhuyin, toggleable
+            fullData.onsets.forEach(o => {
+                const ipa = onsetIPA[o] || '∅';
+                const zhuyin = onsetZhuyin[o] || '';
+                html += `<th class="onset-header"><div class="cell-content" style="flex-direction:column;"><span class="cell-structure" style="color:white;">${ipa}</span><span class="cell-pinyin" style="color:white;">${o}</span><span class="cell-zhuyin" style="color:white;">${zhuyin}</span></div></th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            let prevMedial = null;
+            fullData.rows.forEach((row, ri) => {
+                // Check if medial changed from previous row and determine divider color
+                let dividerClass = '';
+                if (prevMedial !== null && prevMedial !== row.medial) {
+                    // Color based on the NEW medial we're entering
+                    if (row.medial === 'w') dividerClass = 'medial-divider-w';
+                    else if (row.medial === 'j') dividerClass = 'medial-divider-j';
+                    else if (row.medial === 'ɥ') dividerClass = 'medial-divider-y';
+                }
+                prevMedial = row.medial;
+
+                // Rhyme cell with toggleable content and click for audio
+                const rhymeStructure = `${row.medial}-${row.vowel}-${row.coda}`;
+                const rhymeZ = rhymeZhuyin[row.rhyme] || '';
+                const rhymeWg = pinyinToWadeGiles[rhymeToStandalone[row.rhyme] || row.rhyme] || '';
+                html += `<tr class="${dividerClass}"><td class="ipa-cell" data-medial="${row.medial}">${row.medial}</td><td class="ipa-cell">${row.vowel}</td><td class="ipa-cell">${row.coda}</td>`;
+                const rhymeTy = pinyinToTongyong[rhymeToStandalone[row.rhyme] || row.rhyme] || '';
+                html += `<td class="rhyme-cell clickable" data-pinyin="${row.rhyme}" data-zhuyin="${rhymeZ}"><div class="cell-content" style="flex-direction:column;"><span class="cell-structure">${rhymeStructure}</span><span class="cell-pinyin">${row.rhyme}</span><span class="cell-tongyong">${rhymeTy}</span><span class="cell-wg">${rhymeWg}</span><span class="cell-zhuyin">${rhymeZ}</span><span class="cell-ipa">${row.ipa}</span></div></td>`;
+
+                row.cells.forEach((cell, ci) => {
+                    if (cell) {
+                        const onset = fullData.onsets[ci];
+                        const isRare = rareSyllables.has(cell);
+                        // Compute structure (using IPA for onset) and zhuyin
+                        const onsetIPASymbol = onsetIPA[onset]?.replace(/\//g, '') || '∅';
+                        const cellStructure = `${onsetIPASymbol}-${row.medial}-${row.vowel}-${row.coda}`;
+                        const onsetZ = onsetZhuyin[onset] || '';
+                        const rhymeZ = rhymeZhuyin[row.rhyme] || '';
+                        const cellZhuyin = onsetZ + rhymeZ;
+                        const cellWg = pinyinToWadeGiles[cell] || '';
+                        const cellTy = pinyinToTongyong[cell] || '';
+                        html += `<td class="${isRare ? 'rare' : ''}" data-pinyin="${cell}" data-onset="${onset}" data-rhyme="${row.rhyme}" data-ipa="${row.ipa}" data-medial="${row.medial}">
+                            <div class="cell-content"><span class="cell-structure">${cellStructure}</span><span class="cell-pinyin">${cell}</span><span class="cell-tongyong">${cellTy}</span><span class="cell-wg">${cellWg}</span><span class="cell-zhuyin">${cellZhuyin}</span></div></td>`;
+                    } else html += '<td class="empty"></td>';
+                });
+                html += '</tr>';
+            });
+            html += '</tbody>';
+            fullTable.innerHTML = html;
+            addCellListeners(fullTable);
+        }
+
+        function addCellListeners(tbl) {
+            tbl.querySelectorAll('td:not(.empty):not(.ipa-cell)').forEach(cell => {
+                cell.addEventListener('click', handleCellClick);
+                cell.addEventListener('mouseenter', handleCellHover);
+                cell.addEventListener('mouseleave', handleCellLeave);
+            });
+        }
+
+        let tooltipTimeout;
+        function handleCellHover(e) {
+            const cell = e.currentTarget;
+            const pinyin = cell.dataset.pinyin;
+            if (!pinyin) return;
+
+            const onset = cell.dataset.onset || '';
+            const rhyme = cell.dataset.rhyme || '';
+            const medial = cell.dataset.medial || '∅';
+            const ipa = cell.dataset.ipa || '';
+            const zhuyin = cell.dataset.zhuyin || '';
+
+            // Build phonetic breakdown
+            let breakdown = '';
+            if (onset) {
+                // Full syllable chart - has onset info (use IPA for onset)
+                const onsetIPASymbol = onsetIPA[onset]?.replace(/\//g, '') || '∅';
+                // Parse medial, vowel, coda from the full data based on rhyme
+                const rowData = fullData.rows.find(r => r.rhyme === rhyme);
+                if (rowData) {
+                    const medialPart = rowData.medial === '∅' ? '∅' : rowData.medial;
+                    const vowelPart = rowData.vowel === '∅' ? '∅' : rowData.vowel;
+                    const codaPart = rowData.coda === '∅' ? '∅' : rowData.coda;
+                    breakdown = `${onsetIPASymbol}-${medialPart}-${vowelPart}-${codaPart}`;
+                }
+            } else {
+                // Rhyme chart - no onset, use row/col data
+                const row = parseInt(cell.dataset.row);
+                const col = parseInt(cell.dataset.col);
+                if (!isNaN(row) && syllableData.rows[row]) {
+                    const medialPart = syllableData.rows[row].medial.replace(/\//g, '');
+                    // Determine vowel/coda from column position
+                    const codas = ['∅', '∅', '/i/', '/u/', '/n/', '/ŋ/', '∅', '/i/', '/u/', '/n/', '/ŋ/', '∅', '?', '∅', '∅'];
+                    let vowelPart = '∅';
+                    if (col >= 1 && col <= 5) vowelPart = 'ə';
+                    else if (col >= 6 && col <= 10) vowelPart = 'a';
+                    else if (col === 11) vowelPart = 'ɨ';
+                    else if (col === 12) vowelPart = 'ɚ';
+                    else if (col === 13) vowelPart = 'e';
+                    else if (col === 14) vowelPart = 'o';
+                    const codaPart = codas[col] ? codas[col].replace(/\//g, '') : '∅';
+                    breakdown = `${medialPart}-${vowelPart}-${codaPart}`;
+                }
+            }
+
+            tooltipTitle.textContent = pinyin.split('/')[0].replace(/[*-]/g, '').trim();
+            tooltipContent.innerHTML = '';
+            if (breakdown) tooltipContent.innerHTML += `<div><strong>Structure:</strong> <span style="font-family:monospace;color:var(--accent-primary);">${breakdown}</span></div>`;
+            tooltipContent.innerHTML += `<div><strong>Pinyin:</strong> ${pinyin}</div>`;
+
+            // Show Wade-Giles and Tongyong Pinyin notation (below pinyin, above zhuyin)
+            const basePinyin = pinyin.split('/')[0].replace(/[*-]/g, '').trim();
+            const tongyong = pinyinToTongyong[basePinyin];
+            if (tongyong) tooltipContent.innerHTML += `<div><strong>Tongyong:</strong> ${tongyong}</div>`;
+            const wadeGiles = pinyinToWadeGiles[basePinyin];
+            if (wadeGiles) tooltipContent.innerHTML += `<div><strong>Wade-Giles:</strong> ${wadeGiles}</div>`;
+
+            // Compute zhuyin for full syllable chart (onset + rhyme zhuyin) or use direct zhuyin for rhyme chart
+            let fullZhuyin = zhuyin;
+            if (onset && !zhuyin) {
+                // Use global rhymeZhuyin mapping
+                const onsetZ = onsetZhuyin[onset] || '';
+                const rhymeZ = rhymeZhuyin[rhyme] || '';
+                fullZhuyin = onsetZ + rhymeZ;
+            }
+            if (fullZhuyin) tooltipContent.innerHTML += `<div><strong>Zhuyin:</strong> ${fullZhuyin}</div>`;
+
+            // Show frequency for full syllable chart cells (with rank)
+            if (onset) {
+                const freq = freqData[basePinyin];
+                if (freq !== undefined) {
+                    // Calculate rank
+                    const sortedFreqs = Object.values(freqData).sort((a, b) => b - a);
+                    const rank = sortedFreqs.indexOf(freq) + 1;
+                    const suffix = rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th';
+                    tooltipContent.innerHTML += `<div><strong>Frequency:</strong> ${rank}${suffix} (${freq.toLocaleString()} per million)</div>`;
+                }
+            }
+
+            // Show neologism/dialectical status
+            if (neologismSyllables.has(basePinyin)) {
+                tooltipContent.innerHTML += `<div style="color:#f59e0b;margin-top:0.5rem;">🆕 <strong>Neologism</strong> — recently coined syllable</div>`;
+            }
+            if (dialecticalSyllables[basePinyin]) {
+                const dialectInfo = dialecticalSyllables[basePinyin];
+                tooltipContent.innerHTML += `<div style="color:#f97316;margin-top:0.5rem;">🗣️ <strong>Dialectical</strong> — ${dialectInfo}</div>`;
+            }
+
+            const rect = cell.getBoundingClientRect();
+            let left = rect.right + 10, top = rect.top;
+            if (left + 280 > window.innerWidth) left = rect.left - 290;
+            if (top + 150 > window.innerHeight) top = window.innerHeight - 160;
+            tooltip.style.left = left + 'px';
+            tooltip.style.top = top + 'px';
+            clearTimeout(tooltipTimeout);
+            tooltipTimeout = setTimeout(() => tooltip.classList.add('visible'), 150);
+        }
+
+        function handleCellLeave() {
+            clearTimeout(tooltipTimeout);
+            tooltip.classList.remove('visible');
+        }
+
+        // Pinyin to character mapping - loaded from characters.csv
+        // Map from base pinyin (without tone) to array of characters
+        let pinyinToChars = {};
+        let pinyinDataLoaded = false;
+
+        // Master syllable data from syllables.csv
+        let pinyinToWadeGiles = {};    // pinyin -> Wade-Giles
+        let pinyinToTongyong = {};     // pinyin -> Tongyong Pinyin
+        let pinyinToZhuyinMap = {};    // pinyin -> Zhuyin
+        let freqData = {};             // pinyin -> frequency
+        let maxFreq = 1;
+        let rareSyllables = new Set(); // Set of rare syllables
+        let neologismSyllables = new Set(); // Set of neologisms
+        let dialecticalSyllables = {}; // pinyin -> dialect info
+
+        const RARE_FREQ_THRESHOLD = 5; // Syllables below this frequency (per million) are treated as rare
+
+        // Parse a CSV row handling double-quoted fields (RFC 4180)
+        function parseCSVRow(row) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            for (let i = 0; i < row.length; i++) {
+                const char = row[i];
+                if (inQuotes) {
+                    if (char === '"') {
+                        if (row[i + 1] === '"') {
+                            current += '"';
+                            i++; // Skip escaped quote
+                        } else {
+                            inQuotes = false;
+                        }
+                    } else {
+                        current += char;
+                    }
+                } else {
+                    if (char === '"') {
+                        inQuotes = true;
+                    } else if (char === ',') {
+                        result.push(current);
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+            }
+            result.push(current);
+            return result;
+        }
+
+        // Load master syllable data from syllables.csv
+        fetch('syllables.csv')
+            .then(r => r.ok ? r.text() : '')
+            .then(csv => {
+                if (!csv) return;
+                // Parse CSV: hanyu_pinyin,tongyong_pinyin,wade_giles,zhuyin,frequency_per_million,is_rare,...
+                const lines = csv.trim().split('\n');
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i].trim().replace(/\r/g, '');
+                    if (!line) continue;
+                    const parts = parseCSVRow(line);
+                    const pinyin = parts[0]?.trim();
+                    const tongyong = parts[1]?.trim();
+                    const wg = parts[2]?.trim();
+                    const zhuyin = parts[3]?.trim();
+                    const freq = parseFloat(parts[4]) || 0;
+                    const isRare = parts[5]?.trim().toUpperCase() === 'TRUE';
+                    const isNeologism = parts[6]?.trim().toUpperCase() === 'TRUE';
+                    const isDialectical = parts[7]?.trim().toUpperCase() === 'TRUE';
+                    const dialects = parts[8]?.trim() || '';
+
+                    if (pinyin) {
+                        if (wg) pinyinToWadeGiles[pinyin] = wg;
+                        if (tongyong) pinyinToTongyong[pinyin] = tongyong;
+                        if (zhuyin) pinyinToZhuyinMap[pinyin] = zhuyin;
+                        freqData[pinyin] = Math.round(freq);
+
+                        // Mark as rare if: is_rare=TRUE, dialectical, or low frequency
+                        if (isRare || isDialectical || freq < RARE_FREQ_THRESHOLD) {
+                            rareSyllables.add(pinyin);
+                        }
+                        if (isNeologism) neologismSyllables.add(pinyin);
+                        if (isDialectical) dialecticalSyllables[pinyin] = dialects || 'regional';
+                    }
+                }
+                maxFreq = Math.max(...Object.values(freqData), 1);
+                console.log(`Loaded ${Object.keys(pinyinToWadeGiles).length} syllables from syllables.csv (${rareSyllables.size} rare, ${neologismSyllables.size} neologisms, ${Object.keys(dialecticalSyllables).length} dialectical)`);
+                // Rebuild tables now that data is available
+                buildRhymeTable();
+                buildFullTable();
+            })
+            .catch(err => console.warn('Failed to load syllables data', err));
+
+        // Load character data from CSV
+        const csvFiles = ['characters.csv', 'characters-wiktionary.csv'];
+
+        function loadPinyinToChars(csvFiles) {
+            const promises = csvFiles.map(file =>
+                fetch(file)
+                    .then(r => r.ok ? r.text() : '')
+                    .catch(() => '')
+            );
+
+            Promise.all(promises).then(results => {
+                for (const csv of results) {
+                    if (!csv) continue;
+                    const lines = csv.trim().split('\n');
+                    for (let i = 1; i < lines.length; i++) {
+                        const line = lines[i].trim();
+                        if (!line) continue;
+                        const [char, pinyinStr] = line.split(',');
+                        if (!char || !pinyinStr) continue;
+                        const pinyins = pinyinStr.split('|');
+                        for (const py of pinyins) {
+                            const basePinyin = removeTones(py.trim());
+                            if (!basePinyin) continue;
+                            if (!pinyinToChars[basePinyin]) {
+                                pinyinToChars[basePinyin] = [];
+                            }
+                            // Avoid duplicates
+                            if (!pinyinToChars[basePinyin].includes(char)) {
+                                pinyinToChars[basePinyin].push(char);
+                            }
+                        }
+                    }
+                }
+                pinyinDataLoaded = true;
+                console.log(`Loaded ${Object.keys(pinyinToChars).length} pinyin entries from ${csvFiles.length} files`);
+            });
+        }
+        loadPinyinToChars(csvFiles);
+
+        // Load reconstruction data from CSV (OC -> MC -> Mandarin)
+        let reconstructionsData = {}; // zi -> array of {py, mc, oc, gloss}
+
+        fetch('reconstructions.csv')
+            .then(r => r.ok ? r.text() : '')
+            .then(csv => {
+                if (!csv) return;
+                const lines = csv.trim().split('\n');
+                // Header: zi,py,MC,,OC,gloss,GSR,HYDZD,rad,str,Unicode
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i].trim().replace(/\r/g, '');
+                    if (!line) continue;
+                    // Parse CSV carefully - some fields may contain commas within quotes
+                    const parts = parseCSVRow(line);
+                    if (parts.length < 6) continue;
+                    const zi = parts[0];
+                    const py = parts[1];
+                    const mc = parts[2]; // Middle Chinese
+                    // parts[3] is decomposition, skip
+                    const oc = parts[4]; // Old Chinese
+                    const gloss = parts[5]; // Meaning
+
+                    if (!zi) continue;
+                    if (!reconstructionsData[zi]) {
+                        reconstructionsData[zi] = [];
+                    }
+                    // Avoid duplicates based on py
+                    const exists = reconstructionsData[zi].some(r => r.py === py && r.mc === mc);
+                    if (!exists) {
+                        reconstructionsData[zi].push({ py, mc, oc, gloss });
+                    }
+                }
+                console.log(`Loaded ${Object.keys(reconstructionsData).length} characters with reconstructions`);
+            })
+            .catch(err => console.warn('Failed to load reconstructions data', err));
+
+        // Remove tone marks from pinyin
+        function removeTones(pinyin) {
+            const toneMap = {
+                'ā': 'a', 'á': 'a', 'ǎ': 'a', 'à': 'a',
+                'ē': 'e', 'é': 'e', 'ě': 'e', 'è': 'e',
+                'ī': 'i', 'í': 'i', 'ǐ': 'i', 'ì': 'i',
+                'ō': 'o', 'ó': 'o', 'ǒ': 'o', 'ò': 'o',
+                'ū': 'u', 'ú': 'u', 'ǔ': 'u', 'ù': 'u',
+                'ǖ': 'ü', 'ǘ': 'ü', 'ǚ': 'ü', 'ǜ': 'ü',
+                'ü': 'ü', 'ń': 'n', 'ň': 'n', 'ǹ': 'n'
+            };
+            return pinyin.split('').map(c => toneMap[c] || c).join('');
+        }
+
+        // Get a random character for a given pinyin
+        function getRandomChar(basePinyin) {
+            const chars = pinyinToChars[basePinyin];
+            if (chars && chars.length > 0) {
+                return chars[Math.floor(Math.random() * chars.length)];
+            }
+            // Fallback to pinyin itself if no character found
+            return basePinyin;
+        }
+
+        // Convert rhyme-only forms to standalone pinyin for character lookup
+        const rhymeToStandalone = {
+            // i-medial rhymes
+            'i': 'yi', 'ia': 'ya', 'io': 'yo', 'ie': 'ye', 'iao': 'yao', 'iu': 'you',
+            'ian': 'yan', 'in': 'yin', 'iang': 'yang', 'ing': 'ying', 'iong': 'yong',
+            // u-medial rhymes
+            'u': 'wu', 'ua': 'wa', 'uo': 'wo', 'uai': 'wai', 'ui': 'wei',
+            'uan': 'wan', 'un': 'wen', 'uang': 'wang', 'ong': 'weng',
+            // ü-medial rhymes
+            'ü': 'yu', 'üe': 'yue', 'üan': 'yuan', 'ün': 'yun'
+        };
+
+        function handleCellClick(e) {
+            const cell = e.currentTarget;
+            const pinyin = cell.dataset.pinyin;
+            if (!pinyin) return;
+            cell.classList.add('playing');
+            setTimeout(() => cell.classList.remove('playing'), 400);
+            let basePinyin = pinyin.split('/')[0].replace(/[*-]/g, '').trim();
+
+            // Check if this is a rhyme-only cell and convert to standalone form
+            if (rhymeToStandalone[basePinyin]) {
+                basePinyin = rhymeToStandalone[basePinyin];
+            }
+
+            // Get a random character matching this pinyin
+            const charToSpeak = getRandomChar(basePinyin);
+            // Find the full pinyin with tone from the loaded data
+            const charEntry = characterData.find(e => e.char === charToSpeak);
+
+            let displayChar, fullPinyin, zhuyin;
+            if (charEntry) {
+                // Found a character with full data
+                displayChar = charToSpeak;
+                fullPinyin = charEntry.pinyin;
+                zhuyin = charEntry.zhuyin;
+            } else {
+                // No character found - fallback to zhuyin
+                zhuyin = pinyinToZhuyin(basePinyin, basePinyin);
+                displayChar = zhuyin || basePinyin; // Use zhuyin as display, or pinyin if zhuyin also fails
+                fullPinyin = basePinyin;
+            }
+            showSpeakingIndicator(displayChar, fullPinyin, charEntry ? zhuyin : '');
+        }
+
+        searchInput.addEventListener('input', e => {
+            const q = e.target.value.toLowerCase().trim();
+            document.querySelectorAll('#syllableTable td:not(.empty), #fullTable td:not(.empty):not(.ipa-cell):not(.rhyme-cell)').forEach(cell => {
+                const match = !q || (cell.dataset.ipa || '').toLowerCase().includes(q) || (cell.dataset.pinyin || '').toLowerCase().includes(q) || (cell.dataset.zhuyin || '').includes(q);
+                cell.style.opacity = match ? '1' : '0.25';
+                cell.classList.toggle('highlighted', q && match);
+            });
+        });
+
+        document.querySelectorAll('.toggle-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btn.classList.toggle('active');
+                document.body.classList.toggle(`show-${btn.dataset.toggle}`);
+            });
+        });
+
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            const t = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', t);
+            localStorage.setItem('theme', t);
+        });
+
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+                // Toggle body class for hiding search box in character search tab
+                document.body.classList.toggle('tab-search-active', btn.dataset.tab === 'search');
+            });
+        });
+
+        if (localStorage.getItem('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
+
+        // Precompute sorted frequencies for rank lookup (Zipf's law visualization)
+        let sortedFreqs = [];
+        let freqToRank = {};
+
+        function computeFrequencyRanks() {
+            sortedFreqs = Object.entries(freqData)
+                .filter(([_, freq]) => freq > 0)
+                .sort((a, b) => b[1] - a[1]);
+            freqToRank = {};
+            sortedFreqs.forEach(([pinyin, freq], i) => {
+                freqToRank[pinyin] = i + 1; // 1-indexed rank
+            });
+        }
+
+        // Zipf's law color: based on rank with power-law falloff
+        // Top ranks get intense colors, dropping off sharply (like Zipf distribution)
+        function getFreqColor(pinyin, freq) {
+            if (freq === 0 || freq === undefined) return 'transparent';
+            const rank = freqToRank[pinyin];
+            if (!rank) return 'transparent';
+
+            const totalSyllables = sortedFreqs.length;
+            // Zipf power-law: intensity ∝ 1/rank^α (α ≈ 0.5 for gentler curve)
+            // Normalized so rank 1 = 1.0, last rank ≈ 0.1
+            const zipfIntensity = 1 / Math.pow(rank, 0.4);
+            const maxIntensity = 1 / Math.pow(1, 0.4); // = 1
+            const minIntensity = 1 / Math.pow(totalSyllables, 0.4);
+
+            // Normalize to 0-1 range
+            const normalized = (zipfIntensity - minIntensity) / (maxIntensity - minIntensity);
+
+            // Color gradient: purple (low rank/high freq) to light (high rank/low freq)
+            // Using HSL for smoother gradient
+            const hue = 250 - normalized * 30; // 220-250 (blue-purple range)
+            const saturation = 50 + normalized * 40; // 50-90%
+            const lightness = 70 - normalized * 35; // 35-70% (darker for high freq)
+            const alpha = 0.3 + normalized * 0.5; // 0.3-0.8
+
+            return `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
+        }
+
+        let showFreq = false;
+        document.getElementById('freqToggle').addEventListener('click', function () {
+            showFreq = !showFreq;
+            this.classList.toggle('active', showFreq);
+            if (showFreq && sortedFreqs.length === 0) {
+                computeFrequencyRanks();
+            }
+            applyFrequencyColors();
+        });
+
+        function applyFrequencyColors() {
+            fullTable.querySelectorAll('td:not(.empty):not(.ipa-cell):not(.rhyme-cell)').forEach(cell => {
+                const pinyin = cell.dataset.pinyin;
+                const freq = freqData[pinyin];
+                if (showFreq && freq !== undefined) {
+                    cell.style.backgroundColor = getFreqColor(pinyin, freq);
+                    const rank = freqToRank[pinyin] || '?';
+                    const suffix = rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th';
+                    // Show Zipf's law in action: rank vs frequency
+                    cell.title = `${pinyin}: #${rank} (${freq.toLocaleString()}/M) — Zipf: freq ∝ 1/rank`;
+                } else {
+                    cell.style.backgroundColor = '';
+                    cell.title = '';
+                }
+            });
+        }
+
+        buildRhymeTable();
+        buildFullTable();
+
+        // Character Search functionality
+        const charSearchInput = document.getElementById('charSearch');
+        const searchResults = document.getElementById('searchResults');
+
+        // Store the full character data (character -> pinyin with tones)
+        let characterData = []; // Array of {char, pinyin, pinyinBase, zhuyin}
+
+        // Load and process character data for search (from multiple CSV files)
+        function loadCharacterData(csvFiles) {
+            const promises = csvFiles.map(file =>
+                fetch(file)
+                    .then(r => r.ok ? r.text() : '')
+                    .catch(() => '')
+            );
+
+            Promise.all(promises).then(results => {
+                const seen = new Set(); // Track char+pinyin to avoid duplicates
+                for (const csv of results) {
+                    if (!csv) continue;
+                    const lines = csv.trim().split('\n');
+                    for (let i = 1; i < lines.length; i++) {
+                        const line = lines[i].trim();
+                        if (!line) continue;
+                        const [char, pinyinStr] = line.split(',');
+                        if (!char || !pinyinStr) continue;
+                        const pinyins = pinyinStr.split('|');
+                        for (const py of pinyins) {
+                            const pinyin = py.trim();
+                            const key = char + pinyin;
+                            if (seen.has(key)) continue; // Skip duplicates
+                            seen.add(key);
+                            const pinyinBase = removeTones(pinyin);
+                            const zhuyin = pinyinToZhuyin(pinyinBase, pinyin);
+                            characterData.push({ char, pinyin, pinyinBase, zhuyin });
+                        }
+                    }
+                }
+                console.log(`Character search: loaded ${characterData.length} entries from ${csvFiles.length} files`);
+                // Show random characters as initial state
+                showRandomCharacters();
+            });
+        }
+        loadCharacterData(csvFiles);
+
+        // Display random characters in the search results (initial state)
+        function showRandomCharacters() {
+            if (characterData.length === 0) return;
+
+            // Get unique characters (not unique char+pinyin pairs)
+            const charSet = new Map();
+            for (const entry of characterData) {
+                if (!charSet.has(entry.char)) {
+                    charSet.set(entry.char, entry);
+                }
+            }
+            const uniqueChars = Array.from(charSet.values());
+
+            // Randomly select 30 characters
+            const shuffled = uniqueChars.sort(() => Math.random() - 0.5);
+            const randomChars = shuffled.slice(0, 30);
+
+            let html = `<div class="search-stats" style="text-align:center;">✨ Random characters — click to hear pronunciation, search to find more</div>`;
+            html += '<div class="char-grid">';
+            for (const r of randomChars) {
+                html += renderCharCard(r);
+            }
+            html += '</div>';
+            searchResults.innerHTML = html;
+            attachCharCardListeners();
+        }
+
+        // Render a single character card HTML
+        function renderCharCard(r) {
+            const wgBase = pinyinToWadeGiles[r.pinyinBase] || '';
+            const tyBase = pinyinToTongyong[r.pinyinBase] || '';
+            const toneNum = getToneNumber(r.pinyin);
+            // Wade-Giles: superscript tone number 1-4, no mark for neutral (5)
+            const wg = wgBase ? `${wgBase}${toneNum && toneNum !== '5' ? '<sup>' + toneNum + '</sup>' : ''}` : '';
+            // Tongyong Pinyin: tone 1 = no mark, tones 2-4 use Hanyu Pinyin diacritics, neutral (5) = ring above
+            let ty = tyBase;
+            if (tyBase && toneNum) {
+                if (toneNum === '2') ty = addToneMark(tyBase, 'á', 'é', 'í', 'ó', 'ú', 'ǘ');
+                else if (toneNum === '3') ty = addToneMark(tyBase, 'ǎ', 'ě', 'ǐ', 'ǒ', 'ǔ', 'ǚ');
+                else if (toneNum === '4') ty = addToneMark(tyBase, 'à', 'è', 'ì', 'ò', 'ù', 'ǜ');
+                else if (toneNum === '5') ty = tyBase.replace(/([aeiouü])/i, '$1\u030a');
+            }
+            // Zhuyin: neutral tone (5) has ˙ prefix
+            let zhuyin = r.zhuyin || '';
+            if (toneNum === '5' && zhuyin) {
+                zhuyin = '˙' + zhuyin.replace(/[ˊˇˋ˙]/g, '');
+            }
+            // Compute structure from fullData if possible
+            let struct = '';
+            for (const row of fullData.rows) {
+                const ci = row.cells.indexOf(r.pinyinBase);
+                if (ci !== -1) {
+                    const onset = fullData.onsets[ci];
+                    struct = `${onset === '∅' ? '∅' : onset}-${row.medial}-${row.vowel}-${row.coda}`;
+                    break;
+                }
+            }
+            const displayChar = typeof toPreferredScript === 'function' ? toPreferredScript(r.char) : r.char;
+            return `
+                <div class="char-card" data-char="${r.char}" data-pinyin="${r.pinyin}" data-zhuyin="${r.zhuyin}">
+                    <span class="char-play-btn">🔊</span>
+                    <span class="char-info-btn" data-char="${r.char}">ℹ️</span>
+                    <div class="char-hanzi">${displayChar}</div>
+                    <div class="char-structure">${struct}</div>
+                    <div class="char-pinyin">${r.pinyin}</div>
+                    <div class="char-tongyong">${ty}</div>
+                    <div class="char-wg">${wg}</div>
+                    <div class="char-zhuyin">${zhuyin}</div>
+                </div>`;
+        }
+
+        // Attach click listeners to character cards in searchResults
+        function attachCharCardListeners() {
+            searchResults.querySelectorAll('.char-card').forEach(card => {
+                card.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('char-info-btn')) return;
+                    playCharSound(card);
+                });
+            });
+            searchResults.querySelectorAll('.char-info-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    showCharModal(btn.dataset.char);
+                });
+            });
+        }
+
+        // Convert pinyin to zhuyin - uses pinyinToZhuyinMap loaded from syllables.csv
+        function pinyinToZhuyin(basePinyin, fullPinyin) {
+            // First try direct lookup from syllables.csv
+            const directZhuyin = pinyinToZhuyinMap[basePinyin];
+            if (directZhuyin) {
+                // Add tone mark
+                const toneMarks = { '1': 'ˉ', '2': 'ˊ', '3': 'ˇ', '4': 'ˋ', '5': '˙' };
+                const toneNum = getToneNumber(fullPinyin);
+                const tone = toneMarks[toneNum] || '';
+                return directZhuyin + tone;
+            }
+
+            // Fallback: construct from onset + rhyme mappings
+            const onsets = ['zh', 'ch', 'sh', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h', 'j', 'q', 'x', 'r', 'z', 'c', 's', 'y', 'w'];
+            let onset = '';
+            let rhyme = basePinyin;
+
+            for (const o of onsets) {
+                if (basePinyin.startsWith(o)) {
+                    onset = o;
+                    rhyme = basePinyin.slice(o.length);
+                    break;
+                }
+            }
+
+            // Special handling for standalone y- and w- initials
+            if (onset === 'y') {
+                if (rhyme === 'i' || rhyme === '') rhyme = 'i';
+                else if (rhyme.startsWith('u')) rhyme = 'ü' + rhyme.slice(1);
+                else rhyme = 'i' + rhyme;
+                onset = '';
+            }
+            if (onset === 'w') {
+                if (rhyme === 'u' || rhyme === '') rhyme = 'u';
+                else rhyme = 'u' + rhyme;
+                onset = '';
+            }
+
+            const onsetZ = onsetZhuyin[onset] || '';
+            const rhymeZ = rhymeZhuyin[rhyme] || '';
+
+            // Add tone mark
+            const toneMarks = { '1': 'ˉ', '2': 'ˊ', '3': 'ˇ', '4': 'ˋ', '5': '˙' };
+            const toneNum = getToneNumber(fullPinyin);
+            const tone = toneMarks[toneNum] || '';
+
+            return onsetZ + rhymeZ + tone;
+        }
+
+        // Get tone number from pinyin with tone marks
+        function getToneNumber(pinyin) {
+            const tone1 = /[āēīōūǖ]/;
+            const tone2 = /[áéíóúǘń]/;
+            const tone3 = /[ǎěǐǒǔǚň]/;
+            const tone4 = /[àèìòùǜǹ]/;
+            if (tone1.test(pinyin)) return '1';
+            if (tone2.test(pinyin)) return '2';
+            if (tone3.test(pinyin)) return '3';
+            if (tone4.test(pinyin)) return '4';
+            return '5'; // neutral tone
+        }
+
+        // Add tone mark to first vowel in base pinyin (for Tongyong conversion)
+        function addToneMark(base, a, e, i, o, u, v) {
+            // Tone mark placement rules: a/e always get mark, ou marks o, else first vowel
+            if (base.includes('a')) return base.replace('a', a);
+            if (base.includes('e')) return base.replace('e', e);
+            if (base.includes('ou')) return base.replace('o', o);
+            if (base.includes('i')) return base.replace('i', i);
+            if (base.includes('o')) return base.replace('o', o);
+            if (base.includes('u')) return base.replace('u', u);
+            if (base.includes('ü')) return base.replace('ü', v);
+            return base;
+        }
+
+        // Search debounce
+        let searchTimeout;
+        charSearchInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => performCharSearch(e.target.value), 150);
+        });
+
+        function performCharSearch(query) {
+            query = query.trim();
+
+            if (!query) {
+                showRandomCharacters();
+                return;
+            }
+
+            const results = [];
+            const queryLower = query.toLowerCase();
+            const queryBase = removeTones(query);
+
+            for (const entry of characterData) {
+                // Match by character
+                if (entry.char === query) {
+                    results.push({ ...entry, matchType: 'char' });
+                    continue;
+                }
+                // Match by pinyin (with or without tones)
+                if (entry.pinyin.toLowerCase() === queryLower ||
+                    entry.pinyinBase === queryBase ||
+                    entry.pinyinBase.startsWith(queryBase)) {
+                    results.push({ ...entry, matchType: 'pinyin' });
+                    continue;
+                }
+                // Match by zhuyin
+                if (entry.zhuyin && entry.zhuyin.includes(query)) {
+                    results.push({ ...entry, matchType: 'zhuyin' });
+                    continue;
+                }
+            }
+
+            // Remove duplicates (same char + same pinyin)
+            const seen = new Set();
+            const uniqueResults = results.filter(r => {
+                const key = r.char + r.pinyin;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+
+            // Sort: exact matches first, then by character
+            uniqueResults.sort((a, b) => {
+                if (a.matchType === 'char' && b.matchType !== 'char') return -1;
+                if (b.matchType === 'char' && a.matchType !== 'char') return 1;
+                if (a.pinyinBase === queryBase && b.pinyinBase !== queryBase) return -1;
+                if (b.pinyinBase === queryBase && a.pinyinBase !== queryBase) return 1;
+                return a.char.localeCompare(b.char, 'zh-CN');
+            });
+
+            // Store results for "Load More" functionality
+            currentSearchResults = uniqueResults;
+            currentResultsShown = 0;
+            displaySearchResults();
+        }
+
+        // Store search results for incremental loading
+        let currentSearchResults = [];
+        let currentResultsShown = 0;
+        const RESULTS_PER_PAGE = 100;
+
+        function displaySearchResults() {
+            const uniqueResults = currentSearchResults;
+            const startIndex = currentResultsShown;
+            const endIndex = Math.min(startIndex + RESULTS_PER_PAGE, uniqueResults.length);
+            const displayResults = uniqueResults.slice(startIndex, endIndex);
+            const isFirstPage = startIndex === 0;
+
+            if (isFirstPage && displayResults.length === 0) {
+                searchResults.innerHTML = `
+                    <div class="no-results">
+                        <div class="no-results-icon">😕</div>
+                        <p>No characters found</p>
+                    </div>`;
+                return;
+            }
+
+            if (isFirstPage) {
+                let html = `<div class="search-stats">Found ${uniqueResults.length} result${uniqueResults.length > 1 ? 's' : ''} - Click to hear pronunciation</div>`;
+                html += '<div class="char-grid" id="charGridResults">';
+                for (const r of displayResults) {
+                    html += renderCharCard(r);
+                }
+                html += '</div>';
+                if (endIndex < uniqueResults.length) {
+                    html += `<button class="load-more-btn" id="loadMoreBtn">Load More (${uniqueResults.length - endIndex} remaining)</button>`;
+                }
+                searchResults.innerHTML = html;
+            } else {
+                // Append to existing grid
+                const grid = document.getElementById('charGridResults');
+                for (const r of displayResults) {
+                    grid.insertAdjacentHTML('beforeend', renderCharCard(r));
+                }
+                // Update or remove Load More button
+                const loadMoreBtn = document.getElementById('loadMoreBtn');
+                if (endIndex < uniqueResults.length) {
+                    loadMoreBtn.textContent = `Load More (${uniqueResults.length - endIndex} remaining)`;
+                } else if (loadMoreBtn) {
+                    loadMoreBtn.remove();
+                }
+            }
+
+            currentResultsShown = endIndex;
+            attachCharCardListeners();
+
+            // Add Load More button listener
+            const loadMoreBtn = document.getElementById('loadMoreBtn');
+            if (loadMoreBtn) {
+                loadMoreBtn.onclick = () => displaySearchResults();
+            }
+        }
+
+        function playCharSound(card) {
+            const char = card.dataset.char;
+            const pinyin = card.dataset.pinyin;
+            const zhuyin = card.dataset.zhuyin || '';
+
+            card.classList.add('playing');
+            setTimeout(() => card.classList.remove('playing'), 500);
+
+            showSpeakingIndicator(char, pinyin, zhuyin);
+        }
+
+        // Character Detail Modal
+        const charModalOverlay = document.getElementById('charModalOverlay');
+        const charModalChar = document.getElementById('charModalChar');
+        const charModalBody = document.getElementById('charModalBody');
+        const charModalClose = document.getElementById('charModalClose');
+        const charInfoBtn = document.getElementById('charInfoBtn');
+
+        // OpenCC converters
+        let s2tConverter = null;
+        let t2sConverter = null;
+        if (typeof OpenCC !== 'undefined') {
+            s2tConverter = OpenCC.Converter({ from: 'cn', to: 'twp' });
+            t2sConverter = OpenCC.Converter({ from: 'twp', to: 'cn' });
+        }
+
+        // Script preference (simplified or traditional)
+        let preferTraditional = localStorage.getItem('preferTraditional') === 'true';
+
+        // Convert character based on preference
+        function toPreferredScript(char) {
+            if (!char) return char;
+            if (preferTraditional && s2tConverter) {
+                return s2tConverter(char);
+            }
+            return char; // Data is already in simplified
+        }
+
+        // Script toggle buttons
+        const scriptSimpBtn = document.getElementById('scriptSimp');
+        const scriptTradBtn = document.getElementById('scriptTrad');
+
+        function updateScriptToggleUI() {
+            if (preferTraditional) {
+                scriptSimpBtn.classList.remove('active');
+                scriptTradBtn.classList.add('active');
+            } else {
+                scriptSimpBtn.classList.add('active');
+                scriptTradBtn.classList.remove('active');
+            }
+        }
+
+        scriptSimpBtn.addEventListener('click', () => {
+            preferTraditional = false;
+            localStorage.setItem('preferTraditional', 'false');
+            updateScriptToggleUI();
+            refreshCharacterDisplays();
+        });
+
+        scriptTradBtn.addEventListener('click', () => {
+            preferTraditional = true;
+            localStorage.setItem('preferTraditional', 'true');
+            updateScriptToggleUI();
+            refreshCharacterDisplays();
+        });
+
+        // Initialize toggle UI
+        updateScriptToggleUI();
+
+        // Refresh all character displays when toggle changes
+        function refreshCharacterDisplays() {
+            // Update page title
+            document.getElementById('pageTitle').textContent = preferTraditional ? '漢語拼音音節表' : '汉语拼音音节表';
+
+            // Update tab labels
+            document.querySelectorAll('.tab-cn').forEach((span, i) => {
+                const simpTexts = ['韵母表', '音节全表', '字典'];
+                const tradTexts = ['韻母表', '音節全表', '字典'];
+                span.textContent = preferTraditional ? tradTexts[i] : simpTexts[i];
+            });
+
+            // Re-run current search if any
+            const currentQuery = document.getElementById('charSearch').value;
+            if (currentQuery) {
+                performCharSearch(currentQuery);
+            }
+            // Update speaking indicator if visible
+            if (speakingIndicator.classList.contains('visible') && currentSpeakData.char) {
+                speakingChar.textContent = toPreferredScript(currentSpeakData.char);
+            }
+        }
+
+        // Initialize UI on page load
+        refreshCharacterDisplays();
+
+        function showCharModal(char) {
+            if (!char) return;
+
+            // Find all pronunciations for this character
+            const allPronunciations = characterData.filter(e => e.char === char);
+
+            // Convert to traditional using OpenCC
+            const charModalHeader = document.getElementById('charModalHeader');
+            let traditional = char;
+            if (s2tConverter) {
+                traditional = s2tConverter(char);
+            }
+
+            // Display both forms if different, or single form with note if same
+            if (traditional !== char) {
+                charModalHeader.innerHTML = `
+                    <div class="char-modal-forms">
+                        <div class="char-form">
+                            <span class="char-form-label">Simplified 简</span>
+                            <span class="char-form-char simplified">${char}</span>
+                        </div>
+                        <div class="char-form">
+                            <span class="char-form-label">Traditional 繁</span>
+                            <span class="char-form-char traditional">${traditional}</span>
+                        </div>
+                    </div>
+                `;
+            } else {
+                charModalHeader.innerHTML = `
+                    <div class="char-form-same">
+                        <span class="char-modal-char">${char}</span>
+                        <div class="char-same-label">Same in simplified & traditional</div>
+                    </div>
+                `;
+            }
+
+            let bodyHtml = '';
+
+            // Unicode & Technical Info section
+            const codePoint = char.codePointAt(0);
+            const hexCode = codePoint.toString(16).toUpperCase().padStart(4, '0');
+            bodyHtml += '<div class="pron-section">';
+            bodyHtml += '<div class="pron-section-title">Character Info</div>';
+            bodyHtml += `
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Unicode</span>
+                        <span class="info-value">U+${hexCode}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Decimal</span>
+                        <span class="info-value">${codePoint}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">HTML Entity</span>
+                        <span class="info-value">&amp;#${codePoint};</span>
+                    </div>
+                </div>
+            `;
+            bodyHtml += '</div>';
+
+            if (allPronunciations.length > 0) {
+                bodyHtml += '<div class="pron-section">';
+                bodyHtml += '<div class="pron-section-title">Pronunciations</div>';
+
+                allPronunciations.forEach(pron => {
+                    const toneNum = getToneNumber(pron.pinyin);
+                    // Wade-Giles: tone numbers 1-4, no mark for neutral
+                    const wgBase = pinyinToWadeGiles[pron.pinyinBase] || '';
+                    const wg = wgBase ? `${wgBase}${toneNum && toneNum !== '5' ? '<sup>' + toneNum + '</sup>' : ''}` : '';
+                    // Tongyong: tone 1 = no mark, 2-4 = diacritics, 5 = ring above  
+                    const tyBase = pinyinToTongyong[pron.pinyinBase] || '';
+                    let ty = tyBase;
+                    if (tyBase && toneNum) {
+                        if (toneNum === '2') ty = addToneMark(tyBase, 'á', 'é', 'í', 'ó', 'ú', 'ǘ');
+                        else if (toneNum === '3') ty = addToneMark(tyBase, 'ǎ', 'ě', 'ǐ', 'ǒ', 'ǔ', 'ǚ');
+                        else if (toneNum === '4') ty = addToneMark(tyBase, 'à', 'è', 'ì', 'ò', 'ù', 'ǜ');
+                        else if (toneNum === '5') ty = tyBase.replace(/([aeiouü])/i, '$1\u030a');
+                    }
+                    // Zhuyin: neutral tone has ˙ prefix
+                    let zhuyin = pron.zhuyin || '';
+                    if (toneNum === '5' && zhuyin) {
+                        zhuyin = '˙' + zhuyin.replace(/[ˊˇˋ˙]/g, '');
+                    }
+                    const freq = freqData[pron.pinyinBase];
+                    let freqText = '';
+                    if (freq !== undefined) {
+                        const sortedFreqs = Object.values(freqData).sort((a, b) => b - a);
+                        const rank = sortedFreqs.indexOf(freq) + 1;
+                        const suffix = rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th';
+                        freqText = `${rank}${suffix} (${freq.toLocaleString()} per million)`;
+                    }
+
+                    // Compute phonetic structure (using IPA for onset)
+                    let struct = '';
+                    for (const row of fullData.rows) {
+                        const ci = row.cells.indexOf(pron.pinyinBase);
+                        if (ci !== -1) {
+                            const onset = fullData.onsets[ci];
+                            const onsetIPASymbol = onsetIPA[onset]?.replace(/\//g, '') || '∅';
+                            struct = `${onsetIPASymbol}-${row.medial}-${row.vowel}-${row.coda}`;
+                            break;
+                        }
+                    }
+
+                    bodyHtml += `
+                        <div class="pron-row">
+                            <button class="pron-play-btn" data-char="${char}" data-pinyin="${pron.pinyin}" title="Play">🔊</button>
+                            <div class="pron-details">
+                                <span class="pron-pinyin">${pron.pinyin}</span>
+                                ${ty ? `<span class="pron-tongyong">${ty}</span>` : ''}
+                                ${wg ? `<span class="pron-wg">${wg}</span>` : ''}
+                                <span class="pron-zhuyin">${zhuyin}</span>
+                                ${struct ? `<span class="pron-struct">${struct}</span>` : ''}
+                                ${freqText ? `<span class="pron-freq">${freqText}</span>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                bodyHtml += '</div>';
+            }
+
+            // Historical Reconstructions section (OC -> MC -> Mandarin)
+            // Use traditional form for lookup since reconstructions.csv uses traditional characters
+            const recons = reconstructionsData[traditional] || reconstructionsData[char];
+            if (recons && recons.length > 0) {
+                bodyHtml += '<div class="pron-section">';
+                bodyHtml += '<div class="pron-section-title">Historical Reconstructions</div>';
+                bodyHtml += '<div class="history-timeline">';
+
+                recons.forEach(r => {
+                    // Compute structure for Mandarin pinyin
+                    let mandarinStruct = '';
+                    if (r.py) {
+                        const basePy = removeTones(r.py);
+                        for (const row of fullData.rows) {
+                            const ci = row.cells.indexOf(basePy);
+                            if (ci !== -1) {
+                                const onset = fullData.onsets[ci];
+                                const onsetIPASymbol = onsetIPA[onset]?.replace(/\//g, '') || '∅';
+                                mandarinStruct = `${onsetIPASymbol}-${row.medial}-${row.vowel}-${row.coda}`;
+                                break;
+                            }
+                        }
+                    }
+
+                    bodyHtml += `
+                        <div class="history-row">
+                            <div class="history-labels">
+                                <span class="history-label-item">OC</span>
+                                <span class="history-label-item">MC</span>
+                                <span class="history-label-item">Mandarin</span>
+                            </div>
+                            <div class="history-values">
+                                <div class="history-stage">
+                                    <span class="stage-value oc">${r.oc || '—'}</span>
+                                </div>
+                                <span class="history-arrow">→</span>
+                                <div class="history-stage">
+                                    <span class="stage-value mc">${r.mc || '—'}</span>
+                                </div>
+                                <span class="history-arrow">→</span>
+                                <div class="history-stage">
+                                    ${mandarinStruct ? `<span class="stage-struct">${mandarinStruct}</span>` : ''}
+                                    <span class="stage-value mandarin">${r.py || '—'}</span>
+                                </div>
+                            </div>
+                            ${r.gloss ? `<div class="history-gloss">"${r.gloss}"</div>` : ''}
+                        </div>
+                    `;
+                });
+
+                bodyHtml += '</div>';
+                bodyHtml += '</div>';
+            }
+
+            // Stroke Order section (using animCJK for Simp/Trad, KanjiVG as fallback)
+            const codePointHex5 = codePoint.toString(16).toLowerCase().padStart(5, '0');
+            const tradCodePoint = traditional.codePointAt(0);
+            bodyHtml += '<div class="pron-section">';
+            bodyHtml += '<div class="pron-section-title">Stroke Order</div>';
+            bodyHtml += `
+                <div class="stroke-order-grid">
+                    <div class="stroke-order-item">
+                        <span class="stroke-label">Simplified \u7b80</span>
+                        <div class="stroke-order-container">
+                            <img src="https://raw.githubusercontent.com/parsimonhi/animCJK/refs/heads/master/svgsZhHans/${codePoint}.svg" 
+                                 alt="Simplified stroke order for ${char}" 
+                                 class="stroke-order-img"
+                                 onerror="this.onerror=null; this.src='https://raw.githubusercontent.com/KanjiVG/kanjivg/refs/heads/master/kanji/${codePointHex5}.svg'; this.parentElement.querySelector('.stroke-label')?.remove();">
+                        </div>
+                    </div>
+                    <div class="stroke-order-item">
+                        <span class="stroke-label">Traditional \u7e41</span>
+                        <div class="stroke-order-container">
+                            <img src="https://raw.githubusercontent.com/parsimonhi/animCJK/refs/heads/master/svgsZhHant/${tradCodePoint}.svg" 
+                                 alt="Traditional stroke order for ${traditional}" 
+                                 class="stroke-order-img"
+                                 onerror="this.parentElement.innerHTML='<span class=\\'stroke-error\\'>Not available</span>'">
+                        </div>
+                    </div>
+                </div>
+            `;
+            bodyHtml += '</div>';
+
+            // External Resources section (expanded)
+            bodyHtml += '<div class="pron-section">';
+            bodyHtml += '<div class="pron-section-title">External Resources</div>';
+            bodyHtml += `
+                <div class="external-links-grid">
+                    <div class="link-category">
+                        <span class="link-cat-title">📖 Dictionaries</span>
+                        <div class="link-list">
+                            <a href="https://en.wiktionary.org/wiki/${encodeURIComponent(char)}#Chinese" target="_blank" rel="noopener" class="external-link">Wiktionary</a>
+                            <a href="https://www.mdbg.net/chinese/dictionary?page=worddict&wdrst=0&wdqb=${encodeURIComponent(char)}" target="_blank" rel="noopener" class="external-link">MDBG</a>
+                            <a href="https://www.zdic.net/hans/${encodeURIComponent(char)}" target="_blank" rel="noopener" class="external-link">\u6f22\u5178 Zdic</a>
+                            <a href="https://humanum.arts.cuhk.edu.hk/Lexis/lexi-mf/search.php?word=${encodeURIComponent(char)}" target="_blank" rel="noopener" class="external-link">CUHK \u5b57\u5eab</a>
+                        </div>
+                    </div>
+                    <div class="link-category">
+                        <span class="link-cat-title">\ud83d\udcdc Glyph Data</span>
+                        <div class="link-list">
+                            <a href="https://www.unicode.org/cgi-bin/GetUnihanData.pl?codepoint=${encodeURIComponent(char)}" target="_blank" rel="noopener" class="external-link">Unicode Unihan</a>
+                            <a href="https://glyphwiki.org/wiki/u${codePoint.toString(16).toLowerCase()}" target="_blank" rel="noopener" class="external-link">GlyphWiki</a>
+                            <a href="https://www.chise.org/est/view/character/${encodeURIComponent(char)}" target="_blank" rel="noopener" class="external-link">CHISE</a>
+                        </div>
+                    </div>
+                    <div class="link-category">
+                        <span class="link-cat-title">\ud83d\udd0a Pronunciation</span>
+                        <div class="link-list">
+                            <a href="https://forvo.com/word/${encodeURIComponent(char)}/#zh" target="_blank" rel="noopener" class="external-link">Forvo</a>
+                            <a href="https://yabla.com/chinese-english-pinyin-dictionary.php?define=${encodeURIComponent(char)}" target="_blank" rel="noopener" class="external-link">Yabla</a>
+                        </div>
+                    </div>
+                    <div class="link-category">
+                        <span class="link-cat-title">\ud83d\udcdc Etymology</span>
+                        <div class="link-list">
+                            <a href="https://hanziyuan.net/#${encodeURIComponent(char)}" target="_blank" rel="noopener" class="external-link">\u6f22\u5b57\u6e90 Hanziyuan</a>
+                            <a href="https://zi.tools/zi/${encodeURIComponent(char)}" target="_blank" rel="noopener" class="external-link">\u5b57\u7d71\u7f51 Zi.tools</a>
+                        </div>
+                    </div>
+                    <div class="link-category">
+                        <span class="link-cat-title">\ud83d\udcdd Examples</span>
+                        <div class="link-list">
+                            <a href="https://tatoeba.org/en/sentences/search?from=cmn&query=${encodeURIComponent(char)}&to=" target="_blank" rel="noopener" class="external-link">Tatoeba</a>
+                            <a href="https://context.reverso.net/translation/chinese-english/${encodeURIComponent(char)}" target="_blank" rel="noopener" class="external-link">Reverso</a>
+                        </div>
+                    </div>
+                </div>
+            `;
+            bodyHtml += '</div>';
+
+            charModalBody.innerHTML = bodyHtml;
+
+            // Add click handlers to play buttons
+            charModalBody.querySelectorAll('.pron-play-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const c = btn.dataset.char;
+                    const p = btn.dataset.pinyin;
+                    if ('speechSynthesis' in window) {
+                        const u = new SpeechSynthesisUtterance(c);
+                        u.lang = 'zh-CN';
+                        u.rate = 0.8;
+                        speechSynthesis.cancel();
+                        speechSynthesis.speak(u);
+                    }
+                });
+            });
+
+            // Add click handler for copy button
+            charModalBody.querySelectorAll('.copy-char').forEach(copyBtn => {
+                copyBtn.addEventListener('click', async () => {
+                    const charToCopy = copyBtn.dataset.char;
+                    try {
+                        await navigator.clipboard.writeText(charToCopy);
+                        // Show copied feedback
+                        const originalText = copyBtn.querySelector('.info-value').textContent;
+                        copyBtn.querySelector('.info-value').textContent = '✓ Copied!';
+                        setTimeout(() => {
+                            copyBtn.querySelector('.info-value').textContent = originalText;
+                        }, 1500);
+                    } catch (err) {
+                        console.error('Failed to copy:', err);
+                    }
+                });
+            });
+
+            charModalOverlay.classList.add('visible');
+        }
+
+        function closeCharModal() {
+            charModalOverlay.classList.remove('visible');
+        }
+
+        // Close modal handlers
+        charModalClose.addEventListener('click', closeCharModal);
+        charModalOverlay.addEventListener('click', (e) => {
+            if (e.target === charModalOverlay) closeCharModal();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && charModalOverlay.classList.contains('visible')) {
+                closeCharModal();
+            }
+        });
+
+        // Open modal from info button in speaking indicator
+        charInfoBtn.addEventListener('click', () => {
+            const char = currentSpeakData.char;
+            if (char && char.length === 1 && /[\u4e00-\u9fff]/.test(char)) {
+                showCharModal(char);
+            }
+        });
+
+        // Make speaking indicator character clickable
+        speakingChar.style.cursor = 'pointer';
+        speakingChar.addEventListener('click', () => {
+            const char = currentSpeakData.char;
+            if (char && char.length === 1 && /[\u4e00-\u9fff]/.test(char)) {
+                showCharModal(char);
+            }
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,4 @@
+proxy id,proxy name,target id,target name,proxy via,weight ratio,note
+0490,（えんどう類）　グリンピース　生,0491,（えんどう類）　グリンピース　ゆで,cooking,1,
+0492,（えんどう類）　グリンピース　冷凍,0493,（えんどう類）　グリンピース　冷凍　ゆで,cooking,1,
+0492,（えんどう類）　グリンピース　冷凍,0494,（えんどう類）　グリンピース　冷凍　油いため,cooking,1,
