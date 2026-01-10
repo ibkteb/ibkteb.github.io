@@ -312,8 +312,8 @@
                 return;
             }
 
-            const reassembled = receiver.reassemble();
-            const decoded = new TextDecoder().decode(reassembled);
+            const result = receiver.reassemble();
+            const decoded = new TextDecoder().decode(result.data);
             if (decoded === testText) {
                 pass('Data integrity: exact match');
             } else {
@@ -385,8 +385,8 @@
 
             // Final check
             if (receiver.isComplete()) {
-                const reassembled = receiver.reassemble();
-                const decoded = new TextDecoder().decode(reassembled);
+                const result = receiver.reassemble();
+                const decoded = new TextDecoder().decode(result.data);
                 if (decoded === testText) {
                     pass('Full pipeline: data integrity');
                 } else {
@@ -430,8 +430,8 @@
             }
 
             if (allOk && receiver.isComplete()) {
-                const reassembled = receiver.reassemble();
-                const decoded = new TextDecoder().decode(reassembled);
+                const result = receiver.reassemble();
+                const decoded = new TextDecoder().decode(result.data);
                 if (decoded === testText) {
                     pass(`Multi-packet (${sender.totalPackets} packets): success`);
                 } else {

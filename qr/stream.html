@@ -325,8 +325,6 @@
                         <option value="1800">Max (~1.8KB) - Fast transfer</option>
                     </select>
                 </label>
-                <button class="btn btn-primary" id="startSend">▶ Start Sending</button>
-                <button class="btn btn-danger hidden" id="stopSend">⏹ Stop</button>
             </div>
 
             <div class="progress-container">
@@ -335,12 +333,18 @@
                     <span>Size: <strong id="dataSize">0</strong> bytes</span>
                     <span>Est. Time: <strong id="estTime">0s</strong></span>
                 </div>
-                <div class="progress-bar">
+                <div class="progress-bar" id="progressBarSeek" style="cursor: pointer;" title="Click to seek">
                     <div class="progress-fill" id="sendProgress" style="width: 0%"></div>
                 </div>
-                <div class="nav-controls" style="display: flex; gap: 10px; margin-top: 10px; justify-content: center;">
-                    <button class="btn btn-secondary" id="prevPacket" style="padding: 8px 20px;">◀ Prev</button>
-                    <button class="btn btn-secondary" id="nextPacket" style="padding: 8px 20px;">Next ▶</button>
+                <div class="nav-controls"
+                    style="display: flex; gap: 8px; margin-top: 10px; justify-content: center; align-items: center;">
+                    <button class="btn btn-secondary" id="firstPacket" style="padding: 8px 12px;"
+                        title="First">⏮</button>
+                    <button class="btn btn-secondary" id="prevPacket" style="padding: 8px 16px;">◀ Prev</button>
+                    <button class="btn btn-primary" id="startSend" style="padding: 8px 24px;">▶ Start</button>
+                    <button class="btn btn-danger hidden" id="stopSend" style="padding: 8px 24px;">⏹ Stop</button>
+                    <button class="btn btn-secondary" id="nextPacket" style="padding: 8px 16px;">Next ▶</button>
+                    <button class="btn btn-secondary" id="lastPacket" style="padding: 8px 12px;" title="Last">⏭</button>
                 </div>
             </div>
 
@@ -424,10 +428,6 @@
         let sender = null;
         let sendData = null;
 
-        fpsSlider.addEventListener('input', () => {
-            fpsValue.textContent = fpsSlider.value;
-        });
-
         // File handling
         fileDrop.addEventListener('click', () => fileInput.click());
         fileDrop.addEventListener('dragover', e => {
@@ -442,14 +442,18 @@
         });
         fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
 
+        let sendFilename = 'qr-stream-data.txt';
+
         function handleFile(file) {
             if (!file) return;
+            sendFilename = file.name;
             document.getElementById('fileName').textContent = `${file.name} (${formatBytes(file.size)})`;
             const reader = new FileReader();
             reader.onload = () => {
                 sendData = new Uint8Array(reader.result);
                 sendText.value = `[Binary file: ${file.name}]`;
                 sendText.disabled = true;
+                prepareSender(); // Auto-generate QR codes
             };
             reader.readAsArrayBuffer(file);
         }
@@ -460,17 +464,16 @@
             return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
         }
 
-        startSendBtn.addEventListener('click', () => {
+        // Prepare sender (called when settings change or on first load)
+        function prepareSender() {
             const data = sendData || sendText.value;
-            if (!data || (typeof data === 'string' && !data.trim())) {
-                alert('Please enter text or select a file');
-                return;
-            }
+            if (!data || (typeof data === 'string' && !data.trim())) return;
 
             const chunkSize = parseInt(document.getElementById('qrSize').value);
             sender = new QRStream.Sender(data, {
                 fps: parseInt(fpsSlider.value),
-                chunkSize: chunkSize
+                chunkSize: chunkSize,
+                filename: sendFilename
             });
 
             document.getElementById('totalPackets').textContent = sender.totalPackets;
@@ -480,19 +483,37 @@
             document.getElementById('estTime').textContent =
                 (sender.totalPackets / parseInt(fpsSlider.value)).toFixed(1) + 's';
 
-            startSendBtn.classList.add('hidden');
-            stopSendBtn.classList.remove('hidden');
-
             // Adaptive scale: smaller chunks = smaller QR = can use larger scale
             const scaleMap = { 100: 8, 300: 7, 700: 6, 1200: 5, 1800: 4 };
-            const scale = scaleMap[chunkSize] || 5;
-            currentScale = scale;
+            currentScale = scaleMap[chunkSize] || 5;
             currentDisplayIndex = 0;
+
+            // Display first packet
+            displayPacket(0);
+        }
+
+        startSendBtn.addEventListener('click', () => {
+            if (!sender) {
+                prepareSender();
+                if (!sender) {
+                    alert('Please enter text or select a file');
+                    return;
+                }
+            }
+
+            // Loop to beginning if at last frame
+            if (currentDisplayIndex >= sender.totalPackets - 1) {
+                currentDisplayIndex = 0;
+                displayPacket(0);
+            }
+
+            startSendBtn.classList.add('hidden');
+            stopSendBtn.classList.remove('hidden');
 
             sender.onPacket = (packet, seq, total) => {
                 // Generate QR for this packet
                 const qrData = QREncoder.generate(packet, document.getElementById('ecLevel').value);
-                QREncoder.renderToCanvas(qrData, qrCanvas, { scale, margin: 2 });
+                QREncoder.renderToCanvas(qrData, qrCanvas, { scale: currentScale, margin: 2 });
 
                 currentDisplayIndex = seq;
                 document.getElementById('currentPacket').textContent = seq + 1;
@@ -504,6 +525,7 @@
                 stopSending();
             };
 
+            sender.currentIndex = currentDisplayIndex; // Resume from current position
             sender.start();
         });
 
@@ -514,6 +536,18 @@
             startSendBtn.classList.remove('hidden');
             stopSendBtn.classList.add('hidden');
         }
+
+        // Progress bar seek
+        document.getElementById('progressBarSeek').addEventListener('click', (e) => {
+            if (!sender) {
+                prepareSender();
+                if (!sender) return;
+            }
+            const rect = e.target.getBoundingClientRect();
+            const percent = (e.clientX - rect.left) / rect.width;
+            const targetIndex = Math.floor(percent * sender.totalPackets);
+            displayPacket(Math.max(0, Math.min(targetIndex, sender.totalPackets - 1)));
+        });
 
         // Manual packet navigation
         let currentDisplayIndex = 0;
@@ -530,22 +564,48 @@
                 `${((index + 1) / sender.totalPackets) * 100}%`;
         }
 
-        document.getElementById('prevPacket').addEventListener('click', () => {
-            if (sender && sender.isPlaying) {
-                sender.stop();
-                startSendBtn.classList.remove('hidden');
-                stopSendBtn.classList.add('hidden');
+        // Auto-regenerate when settings change
+        sendText.addEventListener('input', () => {
+            sendData = null; // Clear file data when typing
+            sendFilename = 'qr-stream-data.txt';
+            prepareSender();
+        });
+        document.getElementById('qrSize').addEventListener('change', prepareSender);
+        document.getElementById('ecLevel').addEventListener('change', () => {
+            if (sender) displayPacket(currentDisplayIndex); // Re-render with new EC level
+        });
+        fpsSlider.addEventListener('input', () => {
+            fpsValue.textContent = fpsSlider.value;
+            if (sender) {
+                sender.fps = parseInt(fpsSlider.value);
+                document.getElementById('estTime').textContent =
+                    (sender.totalPackets / sender.fps).toFixed(1) + 's';
             }
-            displayPacket(currentDisplayIndex - 1);
+        });
+
+        // Navigation buttons
+        document.getElementById('firstPacket').addEventListener('click', () => {
+            if (sender && sender.isPlaying) stopSending();
+            if (!sender) prepareSender();
+            if (sender) displayPacket(0);
+        });
+
+        document.getElementById('lastPacket').addEventListener('click', () => {
+            if (sender && sender.isPlaying) stopSending();
+            if (!sender) prepareSender();
+            if (sender) displayPacket(sender.totalPackets - 1);
+        });
+
+        document.getElementById('prevPacket').addEventListener('click', () => {
+            if (sender && sender.isPlaying) stopSending();
+            if (!sender) prepareSender();
+            if (sender) displayPacket(currentDisplayIndex - 1);
         });
 
         document.getElementById('nextPacket').addEventListener('click', () => {
-            if (sender && sender.isPlaying) {
-                sender.stop();
-                startSendBtn.classList.remove('hidden');
-                stopSendBtn.classList.add('hidden');
-            }
-            displayPacket(currentDisplayIndex + 1);
+            if (sender && sender.isPlaying) stopSending();
+            if (!sender) prepareSender();
+            if (sender) displayPacket(currentDisplayIndex + 1);
         });
 
         // ===== RECEIVER =====
@@ -720,14 +780,15 @@
                 receiver.checksumErrors.size;
         }
 
-        function onReceiveComplete(data) {
+        function onReceiveComplete(result) {
             stopScanning();
 
             document.getElementById('completeMessage').classList.remove('hidden');
-            document.getElementById('receivedSize').textContent = formatBytes(data.length);
+            document.getElementById('receivedSize').textContent = formatBytes(result.data.length);
 
             // Store for download
-            window.receivedData = data;
+            window.receivedData = result.data;
+            window.receivedFilename = result.filename || 'qr-stream-data';
         }
 
         document.getElementById('downloadBtn').addEventListener('click', () => {
@@ -737,7 +798,7 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'qr-stream-data';
+            a.download = window.receivedFilename;
             a.click();
             URL.revokeObjectURL(url);
         });

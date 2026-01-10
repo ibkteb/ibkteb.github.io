@@ -108,6 +108,7 @@ const QRStream = (() => {
         constructor(data, options = {}) {
             this.chunkSize = options.chunkSize || DEFAULT_CHUNK_SIZE;
             this.fps = options.fps || 15;
+            this.filename = options.filename || 'qr-stream-data';
 
             // Convert to Uint8Array
             if (typeof data === 'string') {
@@ -128,12 +129,20 @@ const QRStream = (() => {
 
         _createPackets() {
             const packets = [];
-            const totalChunks = Math.ceil(this.data.length / this.chunkSize);
+
+            // Prepend filename to data (format: filename + null byte + data)
+            const filenameBytes = new TextEncoder().encode(this.filename);
+            const dataWithFilename = new Uint8Array(1 + filenameBytes.length + this.data.length);
+            dataWithFilename[0] = filenameBytes.length; // Length prefix
+            dataWithFilename.set(filenameBytes, 1);
+            dataWithFilename.set(this.data, 1 + filenameBytes.length);
+
+            const totalChunks = Math.ceil(dataWithFilename.length / this.chunkSize);
 
             for (let i = 0; i < totalChunks; i++) {
                 const start = i * this.chunkSize;
-                const end = Math.min(start + this.chunkSize, this.data.length);
-                const chunk = this.data.slice(start, end);
+                const end = Math.min(start + this.chunkSize, dataWithFilename.length);
+                const chunk = dataWithFilename.slice(start, end);
 
                 let flags = 0;
                 if (i === 0) flags |= FLAG_FIRST;
@@ -279,15 +288,21 @@ const QRStream = (() => {
             }
 
             // Combine packets
-            const result = new Uint8Array(totalSize);
+            const combined = new Uint8Array(totalSize);
             let offset = 0;
             for (let i = 0; i < this.totalPackets; i++) {
                 const chunk = this.packets.get(i);
-                result.set(chunk, offset);
+                combined.set(chunk, offset);
                 offset += chunk.length;
             }
 
-            return result;
+            // Extract filename (format: length byte + filename + data)
+            const filenameLength = combined[0];
+            const filenameBytes = combined.slice(1, 1 + filenameLength);
+            const filename = new TextDecoder().decode(filenameBytes);
+            const data = combined.slice(1 + filenameLength);
+
+            return { filename, data };
         }
 
         getProgress() {
