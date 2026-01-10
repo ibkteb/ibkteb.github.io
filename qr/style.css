@@ -56,22 +56,25 @@ h2 {
     height: 200px;
     border: 3px solid rgba(0, 255, 136, 0.8);
     border-radius: 12px;
-    box-shadow: 
+    box-shadow:
         0 0 0 4000px rgba(0, 0, 0, 0.3),
         inset 0 0 20px rgba(0, 255, 136, 0.2);
     animation: pulse 2s ease-in-out infinite;
 }
 
 @keyframes pulse {
-    0%, 100% {
+
+    0%,
+    100% {
         border-color: rgba(0, 255, 136, 0.8);
-        box-shadow: 
+        box-shadow:
             0 0 0 4000px rgba(0, 0, 0, 0.3),
             inset 0 0 20px rgba(0, 255, 136, 0.2);
     }
+
     50% {
         border-color: rgba(0, 255, 136, 1);
-        box-shadow: 
+        box-shadow:
             0 0 0 4000px rgba(0, 0, 0, 0.3),
             inset 0 0 30px rgba(0, 255, 136, 0.4);
     }
@@ -94,23 +97,22 @@ button {
     transition: all 0.3s ease;
 }
 
-#startBtn {
+#cameraBtn {
     background: linear-gradient(135deg, #00ff88, #00cc6a);
     color: #000;
 }
 
-#startBtn:hover:not(:disabled) {
+#cameraBtn:hover {
     transform: translateY(-2px);
     box-shadow: 0 5px 20px rgba(0, 255, 136, 0.4);
 }
 
-#stopBtn {
+#cameraBtn.active {
     background: linear-gradient(135deg, #ff4757, #ff3344);
     color: #fff;
 }
 
-#stopBtn:hover:not(:disabled) {
-    transform: translateY(-2px);
+#cameraBtn.active:hover {
     box-shadow: 0 5px 20px rgba(255, 71, 87, 0.4);
 }
 
@@ -154,21 +156,155 @@ button:disabled {
     0% {
         background: rgba(0, 255, 136, 0.3);
     }
+
     100% {
         background: rgba(0, 0, 0, 0.3);
     }
+}
+
+/* Tabs */
+.tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.tab {
+    flex: 1;
+    padding: 14px 20px;
+    font-size: 1rem;
+    font-weight: 600;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.tab:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.tab.active {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+}
+
+/* Sections */
+.section {
+    display: none;
+}
+
+.section.active {
+    display: block;
+}
+
+/* Generator Section */
+.input-container {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 20px;
+}
+
+.input-container label {
+    display: block;
+    margin-bottom: 10px;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+#qrText {
+    width: 100%;
+    min-height: 100px;
+    padding: 15px;
+    font-size: 1rem;
+    font-family: inherit;
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #fff;
+    resize: vertical;
+    margin-bottom: 15px;
+    transition: border-color 0.3s ease;
+}
+
+#qrText:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+#qrText::placeholder {
+    color: #64748b;
+}
+
+.qr-output {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: center;
+}
+
+#qrcode {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+    margin-bottom: 15px;
+}
+
+#qrcode canvas {
+    border-radius: 8px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+}
+
+#qrcode:empty::before {
+    content: 'Your QR code will appear here';
+    color: #64748b;
+    font-style: italic;
+}
+
+#downloadBtn {
+    padding: 12px 30px;
+    font-size: 1rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #00ff88, #00cc6a);
+    color: #000;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+#downloadBtn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 20px rgba(0, 255, 136, 0.4);
+}
+
+#downloadBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
 }
 
 @media (max-width: 480px) {
     h1 {
         font-size: 1.5rem;
     }
-    
+
     .scan-region {
         width: 150px;
         height: 150px;
     }
-    
+
     button {
         padding: 10px 20px;
         font-size: 0.9rem;

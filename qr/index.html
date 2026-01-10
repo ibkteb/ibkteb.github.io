@@ -1,35 +1,59 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Code Reader</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <div class="container">
-        <h1>📷 QR Code Reader</h1>
-        
-        <div class="video-container">
-            <video id="video" playsinline></video>
-            <canvas id="canvas" hidden></canvas>
-            <div class="scan-region"></div>
+        <h1>📱 QR Code Tool</h1>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="reader">📷 Reader</button>
+            <button class="tab" data-tab="generator">✏️ Generator</button>
         </div>
-        
-        <div class="controls">
-            <button id="startBtn">Start Camera</button>
-            <button id="stopBtn" disabled>Stop Camera</button>
+
+        <!-- Reader Section -->
+        <div id="reader-section" class="section active">
+            <div class="video-container">
+                <video id="video" playsinline></video>
+                <canvas id="canvas" hidden></canvas>
+                <div class="scan-region"></div>
+            </div>
+
+            <div class="controls">
+                <button id="cameraBtn">Start Camera</button>
+            </div>
+
+            <div class="result-container">
+                <h2>Result</h2>
+                <div id="result" class="result">
+                    <span class="placeholder">Point camera at a QR code...</span>
+                </div>
+            </div>
         </div>
-        
-        <div class="result-container">
-            <h2>Result</h2>
-            <div id="result" class="result">
-                <span class="placeholder">Point camera at a QR code...</span>
+
+        <!-- Generator Section -->
+        <div id="generator-section" class="section">
+            <div class="input-container">
+                <label for="qrText">Enter text or URL:</label>
+                <textarea id="qrText" placeholder="Start typing to generate a QR code..."></textarea>
+            </div>
+
+            <div class="qr-output">
+                <div id="qrcode"></div>
+                <button id="downloadBtn" disabled>Download QR Code</button>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="qr-encoder.js"></script>
+    <script src="qr-decoder.js"></script>
     <script src="script.js"></script>
 </body>
+
 </html>
