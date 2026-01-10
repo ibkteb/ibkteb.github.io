@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Stream - Visual Data Transfer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 30px 0;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #00ff88, #00d4ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            color: #94a3b8;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 15px 30px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: #94a3b8;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.2), rgba(0, 212, 255, 0.2));
+            border-color: #00ff88;
+            color: #fff;
+        }
+
+        .panel {
+            display: none;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 30px;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        /* Sender styles */
+        .input-area {
+            margin-bottom: 20px;
+        }
+
+        .input-area textarea {
+            width: 100%;
+            height: 120px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 15px;
+            color: #fff;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+
+        .file-drop {
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+
+        .file-drop:hover,
+        .file-drop.drag-over {
+            border-color: #00ff88;
+            background: rgba(0, 255, 136, 0.1);
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .controls label {
+            color: #94a3b8;
+        }
+
+        .controls input[type="range"] {
+            width: 150px;
+        }
+
+        .controls select {
+            padding: 10px 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: #fff;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #00ff88, #00d4ff);
+            color: #000;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 255, 136, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .btn-danger {
+            background: #ff4757;
+            color: #fff;
+        }
+
+        .qr-display {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 300px;
+            background: #fff;
+            border-radius: 12px;
+            margin: 20px 0;
+            padding: 20px;
+        }
+
+        .qr-display canvas {
+            max-width: 100%;
+        }
+
+        .progress-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff88, #00d4ff);
+            transition: width 0.1s;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+
+        /* Receiver styles */
+        .camera-container {
+            position: relative;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .camera-container video {
+            width: 100%;
+            display: block;
+        }
+
+        .scan-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 250px;
+            height: 250px;
+            border: 3px solid #00ff88;
+            border-radius: 12px;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+        }
+
+        .received-info {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .missing-display {
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(255, 71, 87, 0.2);
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .complete-message {
+            background: rgba(0, 255, 136, 0.2);
+            border: 2px solid #00ff88;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .complete-message h3 {
+            color: #00ff88;
+            margin-bottom: 10px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>📡 QR Stream</h1>
+            <p>Transfer data visually via rapid QR codes</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="sender">📤 Sender</button>
+            <button class="tab" data-tab="receiver">📥 Receiver</button>
+        </div>
+
+        <!-- SENDER PANEL -->
+        <div class="panel active" id="sender-panel">
+            <div class="input-area">
+                <textarea id="sendText" placeholder="Enter text to send, or drop a file below..."></textarea>
+            </div>
+
+            <div class="file-drop" id="fileDrop">
+                <p>📁 Drop a file here or click to select</p>
+                <p style="color: #94a3b8; font-size: 12px; margin-top: 10px;">
+                    <span id="fileName">No file selected</span>
+                </p>
+                <input type="file" id="fileInput" style="display: none;">
+            </div>
+
+            <div class="controls">
+                <label>
+                    Speed: <span id="fpsValue">15</span> QR/sec
+                    <input type="range" id="fpsSlider" min="5" max="30" value="15">
+                </label>
+                <label>
+                    Error Correction:
+                    <select id="ecLevel">
+                        <option value="L">Low (7%)</option>
+                        <option value="M" selected>Medium (15%)</option>
+                        <option value="Q">Quartile (25%)</option>
+                        <option value="H">High (30%)</option>
+                    </select>
+                </label>
+                <button class="btn btn-primary" id="startSend">▶ Start Sending</button>
+                <button class="btn btn-danger hidden" id="stopSend">⏹ Stop</button>
+            </div>
+
+            <div class="qr-display" id="qrDisplay">
+                <canvas id="qrCanvas"></canvas>
+            </div>
+
+            <div class="progress-container">
+                <div class="stats">
+                    <span>Packet: <strong id="currentPacket">0</strong> / <strong id="totalPackets">0</strong></span>
+                    <span>Size: <strong id="dataSize">0</strong> bytes</span>
+                    <span>Est. Time: <strong id="estTime">0s</strong></span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="sendProgress" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RECEIVER PANEL -->
+        <div class="panel" id="receiver-panel">
+            <div class="camera-container">
+                <video id="video" autoplay playsinline></video>
+                <div class="scan-overlay"></div>
+            </div>
+
+            <div class="controls">
+                <button class="btn btn-primary" id="startReceive">📷 Start Camera</button>
+                <button class="btn btn-secondary" id="resetReceive">🔄 Reset</button>
+            </div>
+
+            <div class="received-info">
+                <div class="stats">
+                    <span>Received: <strong id="receivedCount">0</strong> / <strong id="expectedTotal">?</strong></span>
+                    <span>Checksum Errors: <strong id="checksumErrors">0</strong></span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="receiveProgress" style="width: 0%"></div>
+                </div>
+
+                <div class="missing-display hidden" id="missingDisplay">
+                    Missing packets: <span id="missingList"></span>
+                </div>
+            </div>
+
+            <div class="complete-message hidden" id="completeMessage">
+                <h3>✅ Transfer Complete!</h3>
+                <p><strong id="receivedSize">0</strong> bytes received</p>
+                <div style="margin-top: 15px;">
+                    <button class="btn btn-primary" id="downloadBtn">💾 Download</button>
+                    <button class="btn btn-secondary" id="copyBtn">📋 Copy as Text</button>
+                </div>
+            </div>
+
+            <canvas id="scanCanvas" style="display: none;"></canvas>
+        </div>
+    </div>
+
+    <script src="qr-encoder.js"></script>
+    <script src="qr-stream.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script>
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(`${tab.dataset.tab}-panel`).classList.add('active');
+            });
+        });
+
+        // ===== SENDER =====
+        const qrCanvas = document.getElementById('qrCanvas');
+        const sendText = document.getElementById('sendText');
+        const fpsSlider = document.getElementById('fpsSlider');
+        const fpsValue = document.getElementById('fpsValue');
+        const startSendBtn = document.getElementById('startSend');
+        const stopSendBtn = document.getElementById('stopSend');
+        const fileDrop = document.getElementById('fileDrop');
+        const fileInput = document.getElementById('fileInput');
+
+        let sender = null;
+        let sendData = null;
+
+        fpsSlider.addEventListener('input', () => {
+            fpsValue.textContent = fpsSlider.value;
+        });
+
+        // File handling
+        fileDrop.addEventListener('click', () => fileInput.click());
+        fileDrop.addEventListener('dragover', e => {
+            e.preventDefault();
+            fileDrop.classList.add('drag-over');
+        });
+        fileDrop.addEventListener('dragleave', () => fileDrop.classList.remove('drag-over'));
+        fileDrop.addEventListener('drop', e => {
+            e.preventDefault();
+            fileDrop.classList.remove('drag-over');
+            handleFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+        function handleFile(file) {
+            if (!file) return;
+            document.getElementById('fileName').textContent = `${file.name} (${formatBytes(file.size)})`;
+            const reader = new FileReader();
+            reader.onload = () => {
+                sendData = new Uint8Array(reader.result);
+                sendText.value = `[Binary file: ${file.name}]`;
+                sendText.disabled = true;
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        startSendBtn.addEventListener('click', () => {
+            const data = sendData || sendText.value;
+            if (!data || (typeof data === 'string' && !data.trim())) {
+                alert('Please enter text or select a file');
+                return;
+            }
+
+            sender = new QRStream.Sender(data, { fps: parseInt(fpsSlider.value) });
+
+            document.getElementById('totalPackets').textContent = sender.totalPackets;
+            document.getElementById('dataSize').textContent = formatBytes(
+                sendData ? sendData.length : new TextEncoder().encode(data).length
+            );
+            document.getElementById('estTime').textContent =
+                (sender.totalPackets / parseInt(fpsSlider.value)).toFixed(1) + 's';
+
+            startSendBtn.classList.add('hidden');
+            stopSendBtn.classList.remove('hidden');
+
+            sender.onPacket = (packet, seq, total) => {
+                // Generate QR for this packet
+                const qrData = QREncoder.generate(packet, document.getElementById('ecLevel').value);
+                QREncoder.renderToCanvas(qrData, qrCanvas, { scale: 6, margin: 2 });
+
+                document.getElementById('currentPacket').textContent = seq + 1;
+                document.getElementById('sendProgress').style.width =
+                    `${((seq + 1) / total) * 100}%`;
+            };
+
+            sender.onComplete = () => {
+                stopSending();
+            };
+
+            sender.start();
+        });
+
+        stopSendBtn.addEventListener('click', stopSending);
+
+        function stopSending() {
+            if (sender) sender.stop();
+            startSendBtn.classList.remove('hidden');
+            stopSendBtn.classList.add('hidden');
+        }
+
+        // ===== RECEIVER =====
+        const video = document.getElementById('video');
+        const scanCanvas = document.getElementById('scanCanvas');
+        const scanCtx = scanCanvas.getContext('2d');
+        const startReceiveBtn = document.getElementById('startReceive');
+        const resetReceiveBtn = document.getElementById('resetReceive');
+
+        let receiver = null;
+        let stream = null;
+        let scanning = false;
+
+        startReceiveBtn.addEventListener('click', async () => {
+            if (scanning) {
+                stopScanning();
+                return;
+            }
+
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment', width: { ideal: 1280 } }
+                });
+                video.srcObject = stream;
+                scanning = true;
+                startReceiveBtn.textContent = '⏹ Stop Camera';
+
+                receiver = new QRStream.Receiver();
+                receiver.onProgress = updateReceiverProgress;
+                receiver.onComplete = onReceiveComplete;
+
+                requestAnimationFrame(scanFrame);
+            } catch (err) {
+                alert('Camera access denied: ' + err.message);
+            }
+        });
+
+        function stopScanning() {
+            scanning = false;
+            if (stream) {
+                stream.getTracks().forEach(t => t.stop());
+                stream = null;
+            }
+            video.srcObject = null;
+            startReceiveBtn.textContent = '📷 Start Camera';
+        }
+
+        function scanFrame() {
+            if (!scanning) return;
+
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                scanCanvas.width = video.videoWidth;
+                scanCanvas.height = video.videoHeight;
+                scanCtx.drawImage(video, 0, 0);
+
+                const imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+                if (code && code.data) {
+                    receiver.receive(code.data);
+                }
+            }
+
+            requestAnimationFrame(scanFrame);
+        }
+
+        function updateReceiverProgress(received, total, missing) {
+            document.getElementById('receivedCount').textContent = received;
+            document.getElementById('expectedTotal').textContent = total;
+            document.getElementById('receiveProgress').style.width =
+                `${(received / total) * 100}%`;
+
+            const missingDisplay = document.getElementById('missingDisplay');
+            if (missing.length > 0 && missing.length < total) {
+                missingDisplay.classList.remove('hidden');
+                document.getElementById('missingList').textContent =
+                    missing.length > 20 ?
+                        `${missing.slice(0, 20).join(', ')}... (+${missing.length - 20} more)` :
+                        missing.join(', ');
+            } else {
+                missingDisplay.classList.add('hidden');
+            }
+
+            document.getElementById('checksumErrors').textContent =
+                receiver.checksumErrors.size;
+        }
+
+        function onReceiveComplete(data) {
+            stopScanning();
+
+            document.getElementById('completeMessage').classList.remove('hidden');
+            document.getElementById('receivedSize').textContent = formatBytes(data.length);
+
+            // Store for download
+            window.receivedData = data;
+        }
+
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            if (!window.receivedData) return;
+
+            const blob = new Blob([window.receivedData]);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'qr-stream-data';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        document.getElementById('copyBtn').addEventListener('click', () => {
+            if (!window.receivedData) return;
+
+            const text = new TextDecoder().decode(window.receivedData);
+            navigator.clipboard.writeText(text);
+            alert('Copied to clipboard!');
+        });
+
+        resetReceiveBtn.addEventListener('click', () => {
+            if (receiver) receiver.reset();
+            document.getElementById('receivedCount').textContent = '0';
+            document.getElementById('expectedTotal').textContent = '?';
+            document.getElementById('receiveProgress').style.width = '0%';
+            document.getElementById('missingDisplay').classList.add('hidden');
+            document.getElementById('completeMessage').classList.add('hidden');
+            document.getElementById('checksumErrors').textContent = '0';
+        });
+    </script>
+</body>
+
+</html>
