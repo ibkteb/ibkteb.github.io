@@ -651,12 +651,16 @@
 
             if (found && data && receiver) {
                 foundCount++;
+                console.log(`Worker ${workerIdx}: QR data length=${data.length}, prefix=${data.substring(0, 20)}`);
+
                 const result = receiver.receive(data);
-                console.log(`Worker ${workerIdx} found QR:`, data.substring(0, 30), result);
+                console.log(`  -> receive result:`, result,
+                    `packets=${receiver.packets.size}/${receiver.totalPackets}`,
+                    `isComplete=${receiver.isComplete()}`);
 
                 const debugEl = document.getElementById('debugInfo');
                 if (debugEl) {
-                    debugEl.textContent = `Scan #${scanCount} | Found: ${foundCount} | Workers: ${NUM_WORKERS} | Last: ${result.accepted ? 'OK' : 'rejected'}`;
+                    debugEl.textContent = `Packets: ${receiver.packets.size}/${receiver.totalPackets || '?'} | Scans: ${scanCount} | Found: ${foundCount}`;
                     debugEl.style.color = result.accepted ? '#00ff88' : '#ff4757';
                 }
             }
@@ -783,12 +787,18 @@
         function onReceiveComplete(result) {
             stopScanning();
 
-            document.getElementById('completeMessage').classList.remove('hidden');
-            document.getElementById('receivedSize').textContent = formatBytes(result.data.length);
+            console.log('onReceiveComplete called with:', result);
 
-            // Store for download
-            window.receivedData = result.data;
-            window.receivedFilename = result.filename || 'qr-stream-data';
+            document.getElementById('completeMessage').classList.remove('hidden');
+
+            if (result && result.data) {
+                document.getElementById('receivedSize').textContent = formatBytes(result.data.length);
+                window.receivedData = result.data;
+                window.receivedFilename = result.filename || 'qr-stream-data';
+            } else {
+                console.error('Invalid result:', result);
+                document.getElementById('receivedSize').textContent = '0 (error)';
+            }
         }
 
         document.getElementById('downloadBtn').addEventListener('click', () => {
