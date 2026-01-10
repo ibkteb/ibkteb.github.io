@@ -565,6 +565,56 @@
             scanRateValue.textContent = scanRateSlider.value;
         });
 
+        // Parallel worker pool
+        const NUM_WORKERS = navigator.hardwareConcurrency || 4;
+        let workers = [];
+        let workersBusy = [];
+        let frameId = 0;
+        let scanCount = 0;
+        let foundCount = 0;
+        const MAX_SCAN_SIZE = 640;
+
+        function initWorkers() {
+            for (let i = 0; i < NUM_WORKERS; i++) {
+                const worker = new Worker('qr-worker.js');
+                worker.onmessage = handleWorkerResult;
+                workers.push(worker);
+                workersBusy.push(false);
+            }
+            console.log(`Initialized ${NUM_WORKERS} QR scanner workers`);
+        }
+
+        function handleWorkerResult(e) {
+            const { frameId: fid, found, data } = e.data;
+            const workerIdx = workers.indexOf(e.target);
+            workersBusy[workerIdx] = false;
+
+            if (found && data && receiver) {
+                foundCount++;
+                const result = receiver.receive(data);
+                console.log(`Worker ${workerIdx} found QR:`, data.substring(0, 30), result);
+
+                const debugEl = document.getElementById('debugInfo');
+                if (debugEl) {
+                    debugEl.textContent = `Scan #${scanCount} | Found: ${foundCount} | Workers: ${NUM_WORKERS} | Last: ${result.accepted ? 'OK' : 'rejected'}`;
+                    debugEl.style.color = result.accepted ? '#00ff88' : '#ff4757';
+                }
+            }
+        }
+
+        function getAvailableWorker() {
+            for (let i = 0; i < NUM_WORKERS; i++) {
+                if (!workersBusy[i]) return i;
+            }
+            return -1;
+        }
+
+        function terminateWorkers() {
+            workers.forEach(w => w.terminate());
+            workers = [];
+            workersBusy = [];
+        }
+
         startReceiveBtn.addEventListener('click', async () => {
             if (scanning) {
                 stopScanning();
@@ -577,12 +627,15 @@
                 });
                 video.srcObject = stream;
                 scanning = true;
+                scanCount = 0;
+                foundCount = 0;
                 startReceiveBtn.textContent = '⏹ Stop Camera';
 
                 receiver = new QRStream.Receiver();
                 receiver.onProgress = updateReceiverProgress;
                 receiver.onComplete = onReceiveComplete;
 
+                if (workers.length === 0) initWorkers();
                 requestAnimationFrame(scanFrame);
             } catch (err) {
                 alert('Camera access denied: ' + err.message);
@@ -597,54 +650,52 @@
             }
             video.srcObject = null;
             startReceiveBtn.textContent = '📷 Start Camera';
+            terminateWorkers();
         }
-
-        let scanCount = 0;
-        const MAX_SCAN_SIZE = 640; // Downscale large video for faster processing
 
         function scanFrame() {
             if (!scanning) return;
 
             const debugEl = document.getElementById('debugInfo');
-            scanCount++;
-            const startTime = performance.now();
 
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                // Downscale for performance
-                let w = video.videoWidth;
-                let h = video.videoHeight;
-                if (w > MAX_SCAN_SIZE || h > MAX_SCAN_SIZE) {
-                    const scale = MAX_SCAN_SIZE / Math.max(w, h);
-                    w = Math.floor(w * scale);
-                    h = Math.floor(h * scale);
-                }
+                const workerIdx = getAvailableWorker();
 
-                scanCanvas.width = w;
-                scanCanvas.height = h;
-                scanCtx.drawImage(video, 0, 0, w, h);
+                if (workerIdx >= 0) {
+                    scanCount++;
 
-                const imageData = scanCtx.getImageData(0, 0, w, h);
-                const code = jsQR(imageData.data, imageData.width, imageData.height);
-                const elapsed = (performance.now() - startTime).toFixed(0);
-
-                if (code && code.data) {
-                    console.log('QR detected, data:', code.data.substring(0, 50));
-                    const result = receiver.receive(code.data);
-                    console.log('Receive result:', result);
-                    if (debugEl) {
-                        debugEl.textContent = `Scan #${scanCount}: FOUND! ${code.data.length} chars (${elapsed}ms)`;
-                        debugEl.style.color = result.accepted ? '#00ff88' : '#ff4757';
+                    // Downscale for performance
+                    let w = video.videoWidth;
+                    let h = video.videoHeight;
+                    if (w > MAX_SCAN_SIZE || h > MAX_SCAN_SIZE) {
+                        const scale = MAX_SCAN_SIZE / Math.max(w, h);
+                        w = Math.floor(w * scale);
+                        h = Math.floor(h * scale);
                     }
-                } else if (debugEl) {
-                    debugEl.textContent = `Scan #${scanCount}: No QR (${w}x${h}, ${elapsed}ms)`;
-                    debugEl.style.color = '#94a3b8';
+
+                    scanCanvas.width = w;
+                    scanCanvas.height = h;
+                    scanCtx.drawImage(video, 0, 0, w, h);
+
+                    const imageData = scanCtx.getImageData(0, 0, w, h);
+
+                    // Send to worker
+                    workersBusy[workerIdx] = true;
+                    workers[workerIdx].postMessage({
+                        imageData: imageData.data,
+                        width: w,
+                        height: h,
+                        frameId: frameId++
+                    });
+
+                    if (debugEl && scanCount % 10 === 0) {
+                        const busyCount = workersBusy.filter(b => b).length;
+                        debugEl.textContent = `Scan #${scanCount} | Found: ${foundCount} | Workers: ${busyCount}/${NUM_WORKERS} busy`;
+                        debugEl.style.color = '#94a3b8';
+                    }
                 }
-            } else if (debugEl) {
-                debugEl.textContent = `Scan #${scanCount}: Waiting for video...`;
-                debugEl.style.color = '#ffa500';
             }
 
-            // Schedule next scan
             requestAnimationFrame(scanFrame);
         }
 
