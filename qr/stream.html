@@ -600,41 +600,52 @@
         }
 
         let scanCount = 0;
+        const MAX_SCAN_SIZE = 640; // Downscale large video for faster processing
 
         function scanFrame() {
             if (!scanning) return;
 
             const debugEl = document.getElementById('debugInfo');
             scanCount++;
+            const startTime = performance.now();
 
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                scanCanvas.width = video.videoWidth;
-                scanCanvas.height = video.videoHeight;
-                scanCtx.drawImage(video, 0, 0);
+                // Downscale for performance
+                let w = video.videoWidth;
+                let h = video.videoHeight;
+                if (w > MAX_SCAN_SIZE || h > MAX_SCAN_SIZE) {
+                    const scale = MAX_SCAN_SIZE / Math.max(w, h);
+                    w = Math.floor(w * scale);
+                    h = Math.floor(h * scale);
+                }
 
-                const imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+                scanCanvas.width = w;
+                scanCanvas.height = h;
+                scanCtx.drawImage(video, 0, 0, w, h);
+
+                const imageData = scanCtx.getImageData(0, 0, w, h);
                 const code = jsQR(imageData.data, imageData.width, imageData.height);
+                const elapsed = (performance.now() - startTime).toFixed(0);
 
                 if (code && code.data) {
                     console.log('QR detected, data:', code.data.substring(0, 50));
                     const result = receiver.receive(code.data);
                     console.log('Receive result:', result);
                     if (debugEl) {
-                        debugEl.textContent = `Scan #${scanCount}: FOUND! ${code.data.length} chars, Result: ${JSON.stringify(result)}`;
+                        debugEl.textContent = `Scan #${scanCount}: FOUND! ${code.data.length} chars (${elapsed}ms)`;
                         debugEl.style.color = result.accepted ? '#00ff88' : '#ff4757';
                     }
                 } else if (debugEl) {
-                    debugEl.textContent = `Scan #${scanCount}: No QR detected (${scanCanvas.width}x${scanCanvas.height})`;
+                    debugEl.textContent = `Scan #${scanCount}: No QR (${w}x${h}, ${elapsed}ms)`;
                     debugEl.style.color = '#94a3b8';
                 }
             } else if (debugEl) {
-                debugEl.textContent = `Scan #${scanCount}: Waiting for video... (readyState: ${video.readyState})`;
+                debugEl.textContent = `Scan #${scanCount}: Waiting for video...`;
                 debugEl.style.color = '#ffa500';
             }
 
-            // Use setTimeout for controlled scan rate
-            const scanInterval = 1000 / parseInt(scanRateSlider.value);
-            setTimeout(scanFrame, scanInterval);
+            // Schedule next scan
+            requestAnimationFrame(scanFrame);
         }
 
         function updateReceiverProgress(received, total, missing) {
