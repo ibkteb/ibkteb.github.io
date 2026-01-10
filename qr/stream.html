@@ -304,7 +304,7 @@
             <div class="controls">
                 <label>
                     Speed: <span id="fpsValue">15</span> QR/sec
-                    <input type="range" id="fpsSlider" min="5" max="30" value="15">
+                    <input type="range" id="fpsSlider" min="1" max="30" value="15">
                 </label>
                 <label>
                     Error Correction:
@@ -313,6 +313,16 @@
                         <option value="M" selected>Medium (15%)</option>
                         <option value="Q">Quartile (25%)</option>
                         <option value="H">High (30%)</option>
+                    </select>
+                </label>
+                <label>
+                    QR Size:
+                    <select id="qrSize">
+                        <option value="100">Small (~100B) - Easy to scan</option>
+                        <option value="300">Medium (~300B)</option>
+                        <option value="700">Large (~700B)</option>
+                        <option value="1200" selected>XL (~1.2KB)</option>
+                        <option value="1800">Max (~1.8KB) - Fast transfer</option>
                     </select>
                 </label>
                 <button class="btn btn-primary" id="startSend">▶ Start Sending</button>
@@ -345,6 +355,10 @@
             <div class="controls">
                 <button class="btn btn-primary" id="startReceive">📷 Start Camera</button>
                 <button class="btn btn-secondary" id="resetReceive">🔄 Reset</button>
+                <label>
+                    Scan Rate: <span id="scanRateValue">30</span>/sec
+                    <input type="range" id="scanRateSlider" min="1" max="60" value="30">
+                </label>
             </div>
 
             <div class="received-info">
@@ -444,7 +458,11 @@
                 return;
             }
 
-            sender = new QRStream.Sender(data, { fps: parseInt(fpsSlider.value) });
+            const chunkSize = parseInt(document.getElementById('qrSize').value);
+            sender = new QRStream.Sender(data, {
+                fps: parseInt(fpsSlider.value),
+                chunkSize: chunkSize
+            });
 
             document.getElementById('totalPackets').textContent = sender.totalPackets;
             document.getElementById('dataSize').textContent = formatBytes(
@@ -456,10 +474,14 @@
             startSendBtn.classList.add('hidden');
             stopSendBtn.classList.remove('hidden');
 
+            // Adaptive scale: smaller chunks = smaller QR = can use larger scale
+            const scaleMap = { 100: 8, 300: 7, 700: 6, 1200: 5, 1800: 4 };
+            const scale = scaleMap[chunkSize] || 5;
+
             sender.onPacket = (packet, seq, total) => {
                 // Generate QR for this packet
                 const qrData = QREncoder.generate(packet, document.getElementById('ecLevel').value);
-                QREncoder.renderToCanvas(qrData, qrCanvas, { scale: 6, margin: 2 });
+                QREncoder.renderToCanvas(qrData, qrCanvas, { scale, margin: 2 });
 
                 document.getElementById('currentPacket').textContent = seq + 1;
                 document.getElementById('sendProgress').style.width =
@@ -491,6 +513,12 @@
         let receiver = null;
         let stream = null;
         let scanning = false;
+        let scanRateSlider = document.getElementById('scanRateSlider');
+        let scanRateValue = document.getElementById('scanRateValue');
+
+        scanRateSlider.addEventListener('input', () => {
+            scanRateValue.textContent = scanRateSlider.value;
+        });
 
         startReceiveBtn.addEventListener('click', async () => {
             if (scanning) {
@@ -542,7 +570,9 @@
                 }
             }
 
-            requestAnimationFrame(scanFrame);
+            // Use setTimeout for controlled scan rate instead of requestAnimationFrame
+            const scanInterval = 1000 / parseInt(scanRateSlider.value);
+            setTimeout(scanFrame, scanInterval);
         }
 
         function updateReceiverProgress(received, total, missing) {
