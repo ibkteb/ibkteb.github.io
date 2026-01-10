@@ -105,46 +105,151 @@
             align-items: center;
             flex-grow: 1;
             gap: 15px;
+            position: relative;
+            height: 40px;
         }
 
-        input[type=range] {
+        /* Timeline Track Container */
+        .timeline-track-container {
             flex-grow: 1;
-            cursor: pointer;
-            margin: 0 10px;
+            position: relative;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            user-select: none;
+            /* Prevent text selection */
+            -webkit-user-select: none;
         }
+
+        /* The actual range input - Top Layer */
+        input[type=range] {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+            z-index: 20;
+            /* Highest priority for interaction */
+            margin: 0;
+        }
+
+        /* Visual Track */
+        .timeline-track {
+            position: absolute;
+            width: 100%;
+            height: 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            pointer-events: none;
+        }
+
+        /* Progress Fill */
+        .timeline-progress {
+            position: absolute;
+            height: 6px;
+            background: var(--accent-color);
+            border-radius: 3px;
+            pointer-events: none;
+            width: 0%;
+        }
+
+        /* Thumb / Knob */
+        .timeline-thumb {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: var(--accent-color);
+            border: 2px solid white;
+            border-radius: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+            /* transition removed for instant response */
+        }
+
+        .event-marker {
+            position: absolute;
+            width: 2px;
+            height: 10px;
+            background: #888;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 5;
+            /* Below input */
+            pointer-events: none;
+        }
+
+        .event-marker.major {
+            height: 14px;
+            width: 2px;
+            background: #555;
+        }
+
+        /* JS-driven Hover State */
+        .event-marker.active-hover::after {
+            content: attr(data-label);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+            margin-bottom: 5px;
+            pointer-events: none;
+            z-index: 30;
+            /* Above everything */
+        }
+
+        /* Removed native :hover::after since input blocks it */
 
         .value-display {
             font-family: "Courier New", monospace;
             font-weight: bold;
             min-width: 100px;
-            /* Increased for longer JA strings */
             text-align: right;
+            font-variant-numeric: tabular-nums;
         }
+
+        /* Timeline Intervals */
+        /* Moved to Graph SVG */
 
         #main-view {
             display: flex;
-            flex-direction: row;
+            flex-direction: column;
+            /* Vertical Stack */
             width: 100%;
             max-width: 1400px;
             height: calc(100% - 140px);
-            gap: 20px;
-        }
-
-        #map-container {
-            flex: 2;
-            border: 1px solid var(--border-color);
-            position: relative;
-            background: var(--map-ocean);
+            gap: 10px;
             overflow: hidden;
+            /* Prevent body scroll if content fits */
+            min-height: 0;
         }
 
+        #map-container,
         #graph-container {
             flex: 1;
+            /* Equal 50/50 split vertical */
             border: 1px solid var(--border-color);
             position: relative;
             background: white;
-            display: flex;
-            flex-direction: column;
+            overflow: hidden;
+            min-height: 0;
+            /* Enable flex shrinking */
+            transition: all 0.3s ease;
+        }
+
+        #map-container {
+            background: var(--map-ocean);
+        }
+
+        .hidden {
+            display: none !important;
         }
 
         /* Tooltip */
@@ -281,13 +386,25 @@
     </header>
 
     <div id="controls">
+        <button id="start-btn" class="control-btn" title="Go to Start">⏮</button>
         <button id="play-pause-btn" class="control-btn">Play</button>
-        <button id="reset-btn" class="control-btn">Reset</button>
-        <div class="slider-container">
-            <span style="font-weight: bold;" id="time-label">Time:</span>
-            <input type="range" id="time-slider" min="0" max="1000" value="1000" step="0.01">
-            <span class="value-display" id="time-display">10.00 Ma</span>
+        <button id="end-btn" class="control-btn" title="Go to End">⏭</button>
+        <div class="slider-container" style="align-items: flex-end; padding-bottom: 10px;">
+            <span style="font-weight: bold; margin-bottom: 10px;" id="time-label">Time:</span>
+
+            <div class="timeline-track-container" id="timeline-track-container" style="height: 30px;">
+                <input type="range" id="time-slider" min="0" max="1000" value="0" step="0.01">
+                <div class="timeline-track"></div>
+                <div class="timeline-progress" id="timeline-progress"></div>
+                <div class="markers-container" id="markers-container"></div>
+                <div class="timeline-thumb" id="timeline-thumb"></div>
+            </div>
+
+            <span class="value-display" id="time-display" style="margin-bottom: 10px;">10.00 Ma</span>
         </div>
+        <div style="flex-grow:1"></div> <!-- Spacer -->
+        <button id="toggle-map-btn" class="control-btn" style="width: auto; padding: 0 10px;">Hide Map</button>
+        <button id="toggle-graph-btn" class="control-btn" style="width: auto; padding: 0 10px;">Hide Graph</button>
         <label class="toggle-label">
             <input type="checkbox" id="scaling-toggle">
             <span id="legacy-label">Legacy Scaling</span>
@@ -364,16 +481,62 @@
             lang: 'en'
         };
 
+        // Timeline Events (Major Hominid Milestones)
+        const timelineEvents = [
+            { age: 7.0, label: "Sahelanthropus" },
+            { age: 5.6, label: "Ardipithecus" }, // Approximate range start
+            { age: 4.2, label: "Australopithecus" },
+            { age: 2.8, label: "Homo habilis" },
+            { age: 1.9, label: "Homo erectus" },
+            { age: 0.6, label: "H. heidelbergensis" },
+            { age: 0.3, label: "Homo sapiens" }
+        ];
+
+        // Interval Data (Stacked Bars)
+        const intervalData = [
+            { start: 2.9, end: 1.7, label: 'Oldowan Tools', row: 0 },
+            { start: 2.0, end: 0, label: 'Fire', row: 1 },
+            { start: 1.95, end: 0.2, label: 'Acheulean Tools', row: 2 },
+            { start: 0.4, end: 0.04, label: 'Levallois Technique', row: 3 },
+            { start: 0.16, end: 0.04, label: 'Mousterian Tools', row: 4 },
+            { start: 0.05, end: 0, label: 'Modern Behavior', row: 5 },
+            { start: 0.02, end: 0, label: 'Ceramics/Textiles/Dogs', row: 6 },
+            { start: 0.011, end: 0, label: 'Agriculture', row: 7 }
+        ];
+
+        // Singular Milestone Data (Migrations)
+        const milestoneData = [
+            { age: 1.8, label: "Out of Africa I" },
+            { age: 0.065, label: "Into Australia" },
+            { age: 0.045, label: "Into Arctic" },
+            { age: 0.015, label: "Into Americas" },
+            { age: 0.0002, label: "Into Antarctica" }
+        ];
+
+        // Reference Data (Horizontal Lines)
+        const referenceData = [
+            { value: 900, label: "Modern Human (Min)" },
+            { value: 1700, label: "Modern Human (Max)" },
+            { value: 380, label: "Avg Chimpanzee" }
+        ];
+
         // DOM Elements
         const slider = document.getElementById('time-slider');
+        const timelineProgress = document.getElementById('timeline-progress');
+        const timelineThumb = document.getElementById('timeline-thumb');
+        const markersContainer = document.getElementById('markers-container');
         const timeDisplay = document.getElementById('time-display');
         const playBtn = document.getElementById('play-pause-btn');
-        const resetBtn = document.getElementById('reset-btn');
+        const startBtn = document.getElementById('start-btn');
+        const endBtn = document.getElementById('end-btn');
         const langBtn = document.getElementById('lang-btn');
         const scalingToggle = document.getElementById('scaling-toggle');
         const tooltip = document.getElementById('tooltip');
         const mapContainer = document.getElementById('map-container');
         const graphContainer = document.getElementById('graph-container');
+
+        const toggleMapBtn = document.getElementById('toggle-map-btn');
+        const toggleGraphBtn = document.getElementById('toggle-graph-btn');
 
         // Text Elements
         const titleText = document.getElementById('title-text');
@@ -396,8 +559,7 @@
                 age: +d.Age,
                 cc: +d.CC,
                 lat: +d.Lat,
-                long: +d.Long,
-                normalizedTime: (+d.Age) * 100
+                long: +d.Long
             })).filter(d => d.age != null && d.cc != null && d.lat != null && d.long != null);
 
             state.data = cleanData;
@@ -406,21 +568,36 @@
             // Initial Draw
             initVis(worldData, cleanData);
 
+            // Render Timeline Markers
+            renderTimelineMarkers();
+
             // Event Listeners
+            // Slider Input: Value 0 (Past, 10Ma) -> 1000 (Present, 0Ma)
             slider.addEventListener('input', (e) => {
-                state.currentTime = +e.target.value;
+                const sliderVal = +e.target.value;
+                state.currentTime = sliderVal;
                 updateTimeDisplay();
                 updateVis();
+                updateSliderVisuals();
             });
 
             playBtn.addEventListener('click', togglePlay);
-            resetBtn.addEventListener('click', () => {
-                if (state.isPlaying) togglePlay();
+
+            startBtn.addEventListener('click', () => {
+                state.currentTime = 0;
+                slider.value = 0;
+                updateTimeDisplay();
+                updateVis();
+                updateSliderVisuals();
+                clearHighlights();
+            });
+
+            endBtn.addEventListener('click', () => {
                 state.currentTime = 1000;
                 slider.value = 1000;
                 updateTimeDisplay();
                 updateVis();
-
+                updateSliderVisuals();
                 clearHighlights();
             });
 
@@ -428,12 +605,28 @@
                 state.useLegacyScaling = e.target.checked;
                 graphVis.updateScale(state.useLegacyScaling);
                 updateVis();
+                updateTimeDisplay();
             });
 
             langBtn.addEventListener('click', toggleLanguage);
 
-            // Background Click to Clear - Attached to documents to catch all global clicks not stopped
-            // But we have specific handling on SVGs too. 
+            toggleMapBtn.addEventListener('click', () => {
+                mapContainer.classList.toggle('hidden');
+                const isHidden = mapContainer.classList.contains('hidden');
+                toggleMapBtn.textContent = isHidden ? "Show Map" : "Hide Map";
+
+                // Force Resize for D3
+                setTimeout(() => window.dispatchEvent(new Event('resize')), 300);
+            });
+
+            toggleGraphBtn.addEventListener('click', () => {
+                graphContainer.classList.toggle('hidden');
+                const isHidden = graphContainer.classList.contains('hidden');
+                toggleGraphBtn.textContent = isHidden ? "Show Graph" : "Hide Graph";
+
+                // Force Resize for D3
+                setTimeout(() => window.dispatchEvent(new Event('resize')), 300);
+            });
         });
 
         // Visualization Instances
@@ -444,13 +637,119 @@
             graphVis = new GraphVis(graphContainer, data);
 
             // Initial Update
+            // Start at 0 Ma (Present) or 10 Ma (Past)?
+            // New Logic: Slider 0 = 10Ma. Slider 1000 = 0Ma.
+            // Let's start at the beginning of the "movie": 10Ma (Slider 0).
+            slider.value = 0;
+            state.currentTime = 0;
+
             updateTimeDisplay();
             updateVis();
+            updateSliderVisuals();
         }
 
+        function updateSliderVisuals() {
+            const val = +slider.value;
+            const max = +slider.max;
+            const percent = (val / max) * 100;
+
+            timelineProgress.style.width = `${percent}%`;
+            timelineThumb.style.left = `${percent}%`;
+        }
+
+        function renderTimelineMarkers() {
+            markersContainer.innerHTML = '';
+            // Store markers for hover check
+            state.markers = [];
+
+            timelineEvents.forEach(evt => {
+                const sliderVal = (10 - evt.age) * 100;
+                const percent = (sliderVal / 1000) * 100;
+
+                if (percent >= 0 && percent <= 100) {
+                    const marker = document.createElement('div');
+                    marker.className = 'event-marker';
+                    marker.style.left = `${percent}%`;
+                    marker.dataset.label = evt.label;
+                    marker.dataset.percent = percent; // Store for easy access
+
+                    // No click listener needed: Input handles the click.
+                    // Pointer events are none via CSS.
+
+                    markersContainer.appendChild(marker);
+
+                    state.markers.push({
+                        element: marker,
+                        percent: percent
+                    });
+                }
+            });
+        }
+
+        // Setup Hover Logic for Markers
+        const trackContainer = document.getElementById('timeline-track-container');
+        trackContainer.addEventListener('mousemove', (e) => {
+            const rect = trackContainer.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const width = rect.width;
+            const percent = (x / width) * 100;
+
+            // Threshold for showing tooltip (e.g. within 1-2%)
+            const contentWidth = 1000; // rough px width, or use percentage tolerance
+            const tolerance = 1.5; // percent
+
+            state.markers.forEach(m => {
+                if (Math.abs(m.percent - percent) < tolerance) {
+                    m.element.classList.add('active-hover');
+                } else {
+                    m.element.classList.remove('active-hover');
+                }
+            });
+        });
+
+        trackContainer.addEventListener('mouseleave', () => {
+            if (state.markers) {
+                state.markers.forEach(m => m.element.classList.remove('active-hover'));
+            }
+        });
+
         function updateVis() {
-            mapVis.update(state.data, state.currentTime);
-            graphVis.update(state.data, state.currentTime);
+            // Slider Val: 0 (10Ma) -> 1000 (0Ma)
+            // Vis expects: likely just the raw slider val to filter?
+            // Existing MapVis update logic:
+            // const currentAge = sliderVal / 100; (Previously slider=1000 => 10Ma)
+
+            // New Logic needed for Vis update:
+            // We want to pass the "Current Cutoff Age" to the Vis.
+            // But MapVis logic was: `const visibleData = data.filter(d => d.age >= currentAge);`
+            // If slider was 1000 (10Ma), `currentAge` = 10. `age >= 10` -> Very Few.
+            // If slider was 0 (0Ma), `currentAge` = 0. `age >= 0` -> All.
+
+            // New Slider: 0 -> 10Ma (Start). 1000 -> 0Ma (End).
+            // We need to calculate `currentAge` from `state.currentTime` (which is 0..1000 now reversed).
+
+            // New Logic: 
+            // Slider 0 => Age 10.
+            // Slider 1000 => Age 0.
+            // Age = 10 - (state.currentTime / 100).
+
+            // MapVis currently expects `sliderVal` and divides by 100 inside `update`.
+            // Let's FIX MapVis logic later or adjust what we pass here.
+            // Actually, I should probably adjust `updateVis` to calculate Age here and pass Age to the classes.
+            // But the classes have `update(data, sliderVal)` so let's stick to passing a number.
+
+            // If I change MapVis to use standard Age, that's better.
+            // Let's calc Age here.
+            const age = 10 - (state.currentTime / 100);
+
+            // Wait, existing MapVis: `const currentAge = sliderVal / 100;`
+            // So if I pass `age * 100`, inside it divides by 100 and gets `age`.
+            // Example: Real Age 10. Pass 1000. Inside 1000/100 = 10. Correct.
+            // Example: Real Age 0. Pass 0. Inside 0/100 = 0. Correct.
+
+            // So I should pass `age * 100`.
+            mapVis.update(state.data, age * 100);
+            graphVis.update(state.data, age * 100);
         }
 
         function highlightSpecimen(id) {
@@ -464,20 +763,30 @@
         }
 
         function updateTimeDisplay() {
-            state.currentTime = +slider.value;
+            // state.currentTime is 0..1000 (Left to Right)
+            // Age = 10 - (state.currentTime / 100)
+            const age = 10 - (state.currentTime / 100);
+
+            if (state.useLegacyScaling && state.lang === 'en') {
+                // Kiloyears (ka)
+                const ageKa = age * 1000;
+                timeDisplay.textContent = `${Math.round(ageKa)} ka`;
+                return;
+            }
+
             const suffix = i18n[state.lang].maSuffix;
 
             if (state.lang === 'ja') {
-                // In Japanese, use "万年前" (Ten Thousand Years Ago).
-                // slider=1000 means 10.00 Ma (10,000,000 years).
-                // 10,000,000 years / 10,000 = 1000 (万年).
-                // So state.currentTime is exactly the number of "Ten Thousands".
-                const val = Math.round(state.currentTime);
+                // 10 Ma = 1000 (Ten Thousands)
+                // age * 100 = "Ten Thousands" ? 
+                // 1 Ma = 100 Man
+                // age comes in Ma (e.g. 5.5).
+                // 5.5 Ma = 550 Man
+                // So age * 100.
+                const val = Math.round(age * 100);
                 timeDisplay.textContent = `${val}${suffix}`;
             } else {
-                // In English, use Ma (Millions).
-                const ma = state.currentTime / 100;
-                timeDisplay.textContent = `${ma.toFixed(2)}${suffix}`;
+                timeDisplay.textContent = `${age.toFixed(2)}${suffix}`;
             }
         }
 
@@ -498,11 +807,10 @@
             updateStatsText();
 
             playBtn.textContent = state.isPlaying ? t.pause : t.play;
-            resetBtn.textContent = t.reset;
+
             timeLabel.textContent = t.time + ":";
             legacyLabel.textContent = t.legacy;
 
-            // Update Time Display (suffix)
             updateTimeDisplay();
 
             // Trigger Visual Updates for Labels
@@ -510,19 +818,42 @@
             graphVis.updateLanguage();
         }
 
-        // Legacy Speed Logic
-        function getLegacyStep(value) {
-            if (value <= 1) { return 0.02 }
-            else if (value <= 1.6) { return 0.04 }
-            else if (value <= 3) { return 0.06 }
-            else if (value <= 6) { return 0.1 }
-            else if (value <= 12) { return 0.2 }
-            else if (value <= 30) { return 0.5 }
-            else if (value <= 65) { return 0.7 }
-            else if (value <= 120) { return 1 }
-            else if (value <= 250) { return 2 }
-            else if (value <= 400) { return 10 }
-            else if (value <= 1000) { return 20 }
+        // Legacy Speed Logic (Inverted now?)
+        // Originally: Higher value (older) -> Faster/Slower steps?
+        // Let's keep it simple or invert it properly.
+        // Original: `getLegacyStep(value)` where value was 0..1000 (0=Present, 1000=Past)
+        // Now value is 0..1000 (0=Past, 1000=Present).
+        // If we want "Slower near present", that corresponds to HIGHER slider values now.
+        // Original logic: `if (value <= 1) return 0.02` (Near Present -> Slow).
+
+        // So now, if slider is near 1000 (Present), we want SMALL steps.
+        // If slider is near 0 (Past), we can have LARGE steps.
+
+        // We can just map `1000 - sliderVal` to the old function input.
+
+        function getLegacyStep(sliderVal) {
+            // Invert sliderVal to get "Time Remaining to Present" sort of index
+            // Old val: 0 (Present). New val: 1000 (Present).
+            // distToPresent = 1000 - sliderVal.
+            // But wait, the old function used scaling on the value itself (0..1000).
+            // Let's just use "Age * 100" as the input to the old logic?
+            // Old Logic: `if (value <= 1)`. Value was Age*100.
+            // So yes, let's use Age*100.
+
+            const ageIndex = (10 - (sliderVal / 100)) * 100; // This gives 0..1000 where 0 is Present.
+
+            // Reuse the exact logic values
+            if (ageIndex <= 1) { return 0.02 }
+            else if (ageIndex <= 1.6) { return 0.04 }
+            else if (ageIndex <= 3) { return 0.06 }
+            else if (ageIndex <= 6) { return 0.1 }
+            else if (ageIndex <= 12) { return 0.2 }
+            else if (ageIndex <= 30) { return 0.5 }
+            else if (ageIndex <= 65) { return 0.7 }
+            else if (ageIndex <= 120) { return 1 }
+            else if (ageIndex <= 250) { return 2 }
+            else if (ageIndex <= 400) { return 10 }
+            else if (ageIndex <= 1000) { return 20 }
             return config.defaultStepSize;
         }
 
@@ -536,18 +867,22 @@
                     let step = config.defaultStepSize;
 
                     if (state.useLegacyScaling) {
-                        step = getLegacyStep(+slider.value);
+                        step = getLegacyStep(state.currentTime);
                     }
 
-                    let newVal = +slider.value - step;
-                    if (newVal < 0) {
-                        newVal = 0;
-                        togglePlay();
+                    // Move Slider FORWARD (increase value)
+                    let newVal = +slider.value + step;
+
+                    if (newVal > 1000) {
+                        newVal = 1000;
+                        togglePlay(); // Stop at end
                     }
+
                     slider.value = newVal;
                     state.currentTime = newVal;
                     updateTimeDisplay();
                     updateVis();
+                    updateSliderVisuals();
                 }, config.playSpeed);
             } else {
                 clearInterval(state.timer);
@@ -629,7 +964,7 @@
 
                 this.path = d3.geoPath().projection(this.projection);
 
-                this.colorScale = d3.scaleSequential(d3.interpolateViridis)
+                this.colorScale = d3.scaleSequential(d3.interpolateRdBu)
                     .domain([300, 1600]);
 
                 this.initMap();
@@ -794,7 +1129,8 @@
                 this.container = container;
                 this.width = container.getBoundingClientRect().width;
                 this.height = container.getBoundingClientRect().height;
-                this.margin = { top: 20, right: 30, bottom: 40, left: 60 };
+                // Increased top margin for intervals
+                this.margin = { top: 160, right: 30, bottom: 40, left: 60 };
 
                 this.svg = d3.select(container).append('svg')
                     .attr('width', '100%')
@@ -821,7 +1157,7 @@
                     .domain([0, 1800])
                     .range([this.innerHeight, 0]);
 
-                this.colorScale = d3.scaleSequential(d3.interpolateViridis)
+                this.colorScale = d3.scaleSequential(d3.interpolateRdBu)
                     .domain([300, 1600]);
 
                 this.initGraph(allData);
@@ -839,8 +1175,14 @@
                     this.chartGroup = this.svg.append('g').attr('transform', `translate(${this.margin.left},${this.margin.top})`);
                     this.drawAxes();
                     this.drawGuides();
+                    this.drawReferenceLines();
                     this.drawBackgroundDots(state.data);
-                    this.update(state.data, state.currentTime);
+                    this.drawIntervals(); // Draw intervals on redraw
+                    this.drawMilestones();
+
+                    // Fix: Calculate correct age for update
+                    const age = 10 - (state.currentTime / 100);
+                    this.update(state.data, age * 100);
                 });
             }
 
@@ -861,8 +1203,12 @@
                     this.chartGroup = this.svg.append('g').attr('transform', `translate(${this.margin.left},${this.margin.top})`);
                     this.drawAxes();
                     this.drawGuides();
+                    this.drawReferenceLines();
                     this.drawBackgroundDots(state.data);
-                    this.update(state.data, state.currentTime);
+                    this.drawIntervals(); // Draw intervals
+                    this.drawMilestones();
+                    const age = 10 - (state.currentTime / 100);
+                    this.update(state.data, age * 100);
                 }
             }
 
@@ -870,11 +1216,143 @@
                 this.updateScale(false, false);
                 this.drawAxes();
                 this.drawGuides();
+                this.drawReferenceLines();
                 this.drawBackgroundDots(data);
+                this.drawIntervals(); // Initial draw
+                this.drawMilestones();
+            }
+
+            drawIntervals() {
+                // Interval Bars (Above the chart)
+                const barHeight = 14;
+                const rowHeight = 18;
+
+                // Group for intervals
+                const intervalGroup = this.chartGroup.append('g')
+                    .attr('class', 'interval-group');
+
+                intervalData.forEach(d => {
+                    // Logic: width = xScale(end) - xScale(start). 
+                    // Note: xScale runs High(10) -> Low(0) for Linear?
+                    // Let's check: domain([10, 0]).range([0, wid]).
+                    // So 10 is at 0px, 0 is at wid px.
+                    // Start (e.g. 2.9) is closer to Left. End (1.7) is closer to Right.
+                    // xScale(2.9) < xScale(1.7).
+
+                    const x1 = this.xScale(d.start);
+                    const x2 = this.xScale(d.end);
+
+                    const w = Math.abs(x2 - x1);
+                    const x = Math.min(x1, x2);
+
+                    const y = -(d.row * rowHeight + 20); // Move Up
+
+                    // Bar
+                    intervalGroup.append('rect')
+                        .attr('x', x)
+                        .attr('y', y - barHeight) // y is bottom of text roughly
+                        .attr('width', w)
+                        .attr('height', barHeight)
+                        .attr('fill', '#e0e0e0')
+                        .attr('rx', 2);
+
+                    // Text
+                    let labelText = `${d.label} (${d.start} Ma)`;
+                    if (state.useLegacyScaling && state.lang === 'en') {
+                        labelText = `${d.label} (${Math.round(d.start * 1000)} ka)`;
+                    }
+
+                    intervalGroup.append('text')
+                        .attr('x', x + 4)
+                        .attr('y', y - 3)
+                        .text(labelText)
+                        .attr('font-size', '10px')
+                        .attr('fill', '#444')
+                        .style('pointer-events', 'none'); // Let click pass through
+                });
+            }
+
+            drawMilestones() {
+                const group = this.chartGroup.append('g').attr('class', 'milestone-group');
+
+                milestoneData.forEach(d => {
+                    const x = this.xScale(d.age);
+
+                    // Vertical Line
+                    group.append('line')
+                        .attr('x1', x)
+                        .attr('x2', x)
+                        .attr('y1', -10)
+                        .attr('y2', this.innerHeight)
+                        .attr('stroke', '#666')
+                        .attr('stroke-width', 1)
+                        .attr('stroke-dasharray', '2 2')
+                        .attr('opacity', 0.5)
+                        .style('pointer-events', 'none');
+
+                    // Label
+                    let labelText = `${d.label} (${d.age} Ma)`;
+                    if (state.useLegacyScaling && state.lang === 'en') {
+                        labelText = `${d.label} (${Math.round(d.age * 1000)} ka)`;
+                    }
+
+                    group.append('text')
+                        .attr('x', x)
+                        .attr('y', -5)
+                        .text(labelText)
+                        .attr('font-size', '10px')
+                        .attr('fill', '#333')
+                        .attr('text-anchor', 'start')
+                        .attr('transform', `rotate(-45, ${x}, -5)`)
+                        .style('pointer-events', 'none');
+                });
+            }
+
+            drawReferenceLines() {
+                const group = this.chartGroup.append('g').attr('class', 'reference-group');
+
+                referenceData.forEach(d => {
+                    const y = this.yScale(d.value);
+
+                    // Horizontal Line
+                    group.append('line')
+                        .attr('x1', 0)
+                        .attr('x2', this.innerWidth)
+                        .attr('y1', y)
+                        .attr('y2', y)
+                        .attr('stroke', '#aaa')
+                        .attr('stroke-width', 1)
+                        .attr('stroke-dasharray', '2 1')
+                        .attr('opacity', 0.6)
+                        .style('pointer-events', 'none');
+
+                    // Label
+                    group.append('text')
+                        .attr('x', this.innerWidth - 5)
+                        .attr('y', y - 3)
+                        .text(`${d.label} (${d.value}cc)`)
+                        .attr('font-size', '9px')
+                        .attr('fill', '#666')
+                        .attr('text-anchor', 'end')
+                        .style('pointer-events', 'none');
+                });
             }
 
             drawAxes() {
-                const xAxis = d3.axisBottom(this.xScale);
+                let xAxis;
+
+                if (state.useLegacyScaling) {
+                    xAxis = d3.axisBottom(this.xScale)
+                        .tickValues([10, 5, 2, 1, 0.5, 0.2, 0.1, 0.05, 0])
+                        .tickFormat(d => {
+                            // If English and Legacy: use ka (multiply by 1000)
+                            if (state.lang === 'en') return d * 1000;
+                            return d3.format(".1~f")(d);
+                        });
+                } else {
+                    xAxis = d3.axisBottom(this.xScale);
+                }
+
                 const yAxis = d3.axisLeft(this.yScale);
                 const t = i18n[state.lang];
 
@@ -888,7 +1366,7 @@
                     .attr('x', this.innerWidth / 2)
                     .attr('y', this.innerHeight + 30)
                     .style('text-anchor', 'middle')
-                    .text(t.ageAxis);
+                    .text(state.useLegacyScaling && state.lang === 'en' ? "Age (ka)" : t.ageAxis);
 
                 this.chartGroup.append('g')
                     .attr('class', 'axis y-axis')
@@ -902,24 +1380,76 @@
                     .style('text-anchor', 'middle')
                     .text(t.sizeAxis);
 
-                this.timeLine = this.chartGroup.append('line')
-                    .attr('class', 'timewindow-line')
-                    .attr('y1', 0)
-                    .attr('y2', this.innerHeight)
-                    .style('display', 'none');
-            }
+                // Time Line Group
+                this.timeLineGroup = this.chartGroup.append('g')
+                    .style('display', 'none')
+                    .style('cursor', 'ew-resize');
 
-            drawGuides() {
-                // Dashed lines for cursor
-                this.guideX = this.chartGroup.append('line')
-                    .attr('class', 'guide-line')
+                // Visible Line
+                this.timeLine = this.timeLineGroup.append('line')
+                    .attr('class', 'timewindow-line')
                     .attr('y1', 0)
                     .attr('y2', this.innerHeight);
 
+                // Invisible Wider Hit Area
+                this.timeLineHit = this.timeLineGroup.append('line')
+                    .attr('y1', 0)
+                    .attr('y2', this.innerHeight)
+                    .attr('stroke', 'transparent')
+                    .attr('stroke-width', 20);
+
+                // Drag Behavior
+                const drag = d3.drag()
+                    .on('drag', (event) => {
+                        // event.x is local coordinate in chartGroup
+                        const x = Math.max(0, Math.min(this.innerWidth, event.x));
+                        const age = this.xScale.invert(x);
+
+                        // Convert Age to Slider Value (0..1000)
+                        // Age = 10 - (sliderVal / 100)
+                        // sliderVal/100 = 10 - Age
+                        // sliderVal = (10 - Age) * 100
+                        let sliderVal = (10 - age) * 100;
+                        sliderVal = Math.max(0, Math.min(1000, sliderVal));
+
+                        // Update State & UI
+                        state.currentTime = sliderVal;
+                        slider.value = sliderVal;
+                        updateTimeDisplay();
+                        updateVis();
+                        updateSliderVisuals();
+                    });
+
+                this.timeLineGroup.call(drag);
+            }
+
+            drawGuides() {
+                // Crosshairs
+                this.guideX = this.chartGroup.append('line')
+                    .attr('stroke', '#999')
+                    .attr('stroke-width', 1)
+                    .attr('stroke-dasharray', '4 4')
+                    .style('display', 'none');
+
                 this.guideY = this.chartGroup.append('line')
-                    .attr('class', 'guide-line')
-                    .attr('x1', 0)
-                    .attr('x2', this.innerWidth);
+                    .attr('stroke', '#999')
+                    .attr('stroke-width', 1)
+                    .attr('stroke-dasharray', '4 4')
+                    .style('display', 'none');
+
+                // Cursor Label
+                this.guideLabel = this.chartGroup.append('text')
+                    .attr('class', 'guide-label')
+                    .attr('fill', '#333')
+                    .attr('font-size', '12px')
+                    .style('pointer-events', 'none')
+                    .style('display', 'none');
+            }
+
+            hideGuides() {
+                if (this.guideX) this.guideX.style('display', 'none');
+                if (this.guideY) this.guideY.style('display', 'none');
+                if (this.guideLabel) this.guideLabel.style('display', 'none');
             }
 
             updateGuides(event) {
@@ -930,8 +1460,29 @@
 
                 // Check if within bounds
                 if (x >= 0 && x <= this.innerWidth && y >= 0 && y <= this.innerHeight) {
-                    this.guideX.attr('x1', x).attr('x2', x).style('display', 'block');
-                    this.guideY.attr('y1', y).attr('y2', y).style('display', 'block');
+                    this.guideX.attr('x1', x).attr('x2', x).attr('y1', 0).attr('y2', this.innerHeight).style('display', 'block');
+                    this.guideY.attr('y1', y).attr('y2', y).attr('x1', 0).attr('x2', this.innerWidth).style('display', 'block');
+
+                    // Update Labels
+                    const age = this.xScale.invert(x);
+                    const cc = this.yScale.invert(y);
+
+                    let timeText = `${age.toFixed(2)} Ma`;
+                    if (state.useLegacyScaling && state.lang === 'en') {
+                        timeText = `${Math.round(age * 1000)} ka`;
+                    }
+
+                    this.guideLabel
+                        .attr('x', x + 10)
+                        .attr('y', y - 10)
+                        .text(`${timeText}, ${Math.round(cc)} cc`)
+                        .style('display', 'block');
+
+                    // Keep label on screen
+                    const labelWidth = this.guideLabel.node().getComputedTextLength();
+                    if (x + labelWidth + 20 > this.innerWidth) {
+                        this.guideLabel.attr('x', x - labelWidth - 10);
+                    }
                 } else {
                     this.hideGuides();
                 }
@@ -1002,14 +1553,14 @@
                     .attr('cx', d => this.xScale(d.age))
                     .attr('cy', d => this.yScale(d.cc));
 
-                if (this.timeLine) {
-                    this.timeLine
+                if (this.timeLineGroup) {
+                    this.timeLineGroup
                         .style('display', 'block')
-                        .attr('x1', this.xScale(currentAge))
-                        .attr('x2', this.xScale(currentAge));
-                    // Ensure timeLine is above dots? currently appended last in drawAxes, but dots appended later.
-                    // Actually dots are appended later, raising them.
-                    this.timeLine.raise();
+                        .attr('transform', `translate(${this.xScale(currentAge)}, 0)`);
+
+                    // Lines are drawn at x=0 relative to group, so just ensure their vertical is set (done in init)
+
+                    this.timeLineGroup.raise();
                 }
             }
 

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chinese Character Search - Dictionary</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600&family=Noto+Sans+TC:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+  <script type="module" crossorigin src="/assets/search-CLlIkdK5.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/indicator-CMPx_ztt.js">
+  <link rel="stylesheet" crossorigin href="/assets/indicator-BLLriItc.css">
+</head>
+
+<body class="show-ipa show-pinyin show-zhuyin">
+    <div class="container">
+        <header>
+            <h1 id="pageTitle">Chinese Character Dictionary</h1>
+            <p class="subtitle">Search by character, pinyin, or zhuyin</p>
+            <button class="theme-toggle" id="themeToggle" title="Toggle theme"></button>
+            <div class="script-toggle">
+                <span class="script-toggle-label">Script:</span>
+                <div class="script-toggle-switch">
+                    <button class="script-toggle-btn simp active" id="scriptSimp" title="Simplified Chinese">简</button>
+                    <button class="script-toggle-btn trad" id="scriptTrad" title="Traditional Chinese">繁</button>
+                </div>
+            </div>
+        </header>
+        <div style="text-align:center; margin-bottom: 2rem;">
+            <a href="index.html" class="tab-btn">← Back to Syllable Charts</a>
+        </div>
+
+        <div class="search-section">
+            <div class="char-search-box">
+                <input type="text" id="charSearch" placeholder="Search by character, pinyin, or zhuyin..."
+                    autocomplete="off">
+                <span class="search-hint">Try: 你, ni, ㄋㄧ, hao, 好...</span>
+            </div>
+            <div class="search-results" id="searchResults">
+                <div class="search-placeholder">
+                    <span class="placeholder-icon">🔍</span>
+                    <p>Enter a character, pinyin (with or without tones), or zhuyin to search</p>
+                    <p class="placeholder-hint">Results will show matching characters with pronunciation</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- UI Elements required by common.js -->
+    <div class="speaking-indicator" id="speakingIndicator">
+        <div class="speaking-content">
+            <span class="speaking-char" id="speakingChar"></span>
+            <div class="speaking-info">
+                <span class="speaking-pinyin" id="speakingPinyin"></span>
+                <span class="speaking-zhuyin" id="speakingZhuyin"></span>
+            </div>
+        </div>
+        <button class="replay-btn" id="replayBtn" title="Play again">🔊</button>
+        <button class="info-btn" id="charInfoBtn" title="Character details">ℹ️</button>
+        <button class="close-btn" id="closeIndicator" title="Close">✕</button>
+    </div>
+
+    <!-- Character Detail Modal -->
+    <div class="char-modal-overlay" id="charModalOverlay">
+        <div class="char-modal">
+            <button class="char-modal-close" id="charModalClose">✕</button>
+            <div class="char-modal-header">
+                <div id="charModalHeader"></div>
+            </div>
+            <div class="char-modal-body" id="charModalBody">
+                <!-- Content populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>

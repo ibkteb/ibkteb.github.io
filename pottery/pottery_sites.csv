@@ -1,6 +1,4 @@
-Site Name,Latitude,Longitude,"DateBP 
-(uncal) ± SD","Average date cal BP 
-(INTCAL 09)",Economy,Retained?
+site,latitude,longitude,date_bp_uncal,date_bp,economy,retained
 Abingdon,51.7,-1.3,"5060±13 
 0",5818,F,
 Abka,21.8,31.2,"8260±40 

@@ -3,18 +3,18 @@
 
 <head>
     <meta charset="utf-8">
-    <title>Early Pottery Sites Worldwide</title>
+    <title>Early Pottery Sites Worldwide (Canvas)</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/proj4@2.9.0/dist/proj4.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/proj4leaflet@1.0.2/src/proj4leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
     <style>
         :root {
             --bg-color: #ffffff;
             --text-color: #333333;
             --border-color: #cccccc;
             --accent-color: #2c3e50;
-            --map-land: #e8e4df;
-            --map-ocean: #f5f5f5;
-            --map-stroke: #999999;
         }
 
         * {
@@ -133,125 +133,11 @@
         }
 
         #map-container {
-            flex: 2;
-            border: 1px solid var(--border-color);
-            position: relative;
-            background: var(--map-ocean);
-            overflow: hidden;
-        }
-
-        #graph-container {
             flex: 1;
+            width: 100%;
             border: 1px solid var(--border-color);
             position: relative;
-            background: white;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* Tooltip */
-        #tooltip {
-            position: absolute;
-            background: rgba(255, 255, 255, 0.97);
-            border: 1px solid #333;
-            padding: 10px;
-            font-size: 12px;
-            pointer-events: none;
-            box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.15);
-            display: none;
-            z-index: 100;
-            max-width: 300px;
-            border-radius: 4px;
-        }
-
-        .tooltip-row {
-            display: flex;
-            justify-content: space-between;
-            gap: 10px;
-            margin-bottom: 3px;
-        }
-
-        .tooltip-label {
-            font-weight: bold;
-            color: #666;
-        }
-
-        .tooltip-value {
-            text-align: right;
-        }
-
-        /* D3 Styles */
-        .graticule {
-            fill: none;
-            stroke: #ddd;
-            stroke-width: 0.5px;
-            stroke-opacity: 0.5;
-        }
-
-        .country {
-            fill: var(--map-land);
-            stroke: var(--map-stroke);
-            stroke-width: 0.5px;
-        }
-
-        .data-point {
-            cursor: pointer;
-            transition: r 0.2s, stroke-width 0.2s;
-        }
-
-        .data-point:hover {
-            stroke: #000;
-        }
-
-        .highlighted-point {
-            stroke: #000 !important;
-            stroke-width: 2px !important;
-            filter: brightness(1.2);
-        }
-
-        .active-dot {
-            cursor: pointer;
-        }
-
-        .active-dot:hover {
-            stroke: #000;
-            stroke-width: 2px;
-        }
-
-        .active-dot.selected {
-            stroke: #000;
-            stroke-width: 2px;
-        }
-
-        .axis-label {
-            font-size: 12px;
-            font-style: italic;
-        }
-
-        .axis line,
-        .axis path {
-            stroke: #333;
-        }
-
-        .axis text {
-            fill: #333;
-            font-family: sans-serif;
-            font-size: 10px;
-        }
-
-        .timewindow-line {
-            stroke: #d00;
-            stroke-width: 1.5px;
-            stroke-dasharray: 4 2;
-        }
-
-        /* Guide Lines for Graph Cursor */
-        .guide-line {
-            stroke: #999;
-            stroke-width: 1px;
-            stroke-dasharray: 4 4;
-            pointer-events: none;
-            display: none;
+            overflow: hidden;
         }
 
         .legend-container {
@@ -264,6 +150,24 @@
             font-size: 11px;
             pointer-events: none;
             border-radius: 4px;
+            z-index: 1000;
+        }
+
+        .map-date-display {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px 25px;
+            border: 2px solid #333;
+            font-size: 48px;
+            font-weight: bold;
+            font-family: "Courier New", monospace;
+            pointer-events: none;
+            border-radius: 8px;
+            z-index: 1000;
+            color: #333;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
         .legend-item {
@@ -297,15 +201,42 @@
         .filter-group input[type="checkbox"] {
             cursor: pointer;
         }
+
+        #canvas-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            z-index: 400;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(44, 62, 80, 0.95);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 1001;
+            white-space: nowrap;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .tooltip.visible {
+            opacity: 1;
+        }
     </style>
 </head>
 
 <body>
     <header>
         <div>
-            <h1 id="title-text">Early Pottery Sites Worldwide</h1>
-            <div class="citation" id="citation-text">Data source: early pottery sites - list.csv | Visualization: D3.js
-                v7</div>
+            <h1 id="title-text">Early Pottery Sites Worldwide (Canvas)</h1>
+            <div class="citation" id="citation-text">Data source: early pottery sites - list.csv | Visualization:
+                Leaflet + Canvas</div>
         </div>
         <div style="text-align: right; font-size: 12px;">
             <span id="stats-display">Loaded 0 sites</span>
@@ -321,6 +252,11 @@
             <input type="range" id="time-slider" min="0" max="17000" value="17000" step="10">
             <span class="value-display" id="time-display">17,000 BP</span>
         </div>
+        <div class="slider-container">
+            <span style="font-weight: bold;">Window:</span>
+            <input type="range" id="window-slider" min="0" max="5000" value="1000" step="50">
+            <span class="value-display" id="window-display">±1,000 years</span>
+        </div>
         <div class="filter-group" id="filter-group">
             <span style="font-weight: bold;" id="filter-label">Economy:</span>
             <label><input type="checkbox" id="filter-hg" checked> <span id="filter-hg-label">HG</span></label>
@@ -328,33 +264,41 @@
             <label><input type="checkbox" id="filter-me" checked> <span id="filter-me-label">ME</span></label>
         </div>
         <div class="filter-group">
-            <label><input type="checkbox" id="filter-kites"> <span id="filter-kites-label">Desert Kites</span></label>
+            <label><input type="checkbox" id="filter-kites"> <span id="filter-kites-label">Desert
+                    Kites</span></label>
+            <label><input type="checkbox" id="filter-rivers" checked> <span
+                    id="filter-rivers-label">Rivers</span></label>
+            <label><input type="checkbox" id="filter-lakes" checked> <span id="filter-lakes-label">Lakes</span></label>
+        </div>
+        <div class="filter-group">
+            <label><input type="checkbox" id="filter-trail" checked> <span id="filter-trail-label">Trail</span></label>
+            <label><input type="checkbox" id="filter-network" checked> <span id="filter-network-label">Network</span></label>
+            <label><input type="checkbox" id="filter-metaballs" checked> <span id="filter-metaballs-label">Metaballs</span></label>
+            <label><input type="checkbox" id="filter-precomputed-lines" checked> <span id="filter-precomputed-lines-label">LCP Paths</span></label>
         </div>
     </div>
 
     <div id="main-view">
         <div id="map-container">
             <div class="legend-container" id="map-legend"></div>
+            <div class="map-date-display" id="map-date-display"></div>
         </div>
-        <div id="graph-container"></div>
     </div>
 
-    <div id="tooltip"></div>
+    <div class="tooltip" id="tooltip"></div>
 
     <script>
         // Localization
         const i18n = {
             en: {
-                title: "Early Pottery Sites Worldwide",
-                citation: "Data source: early pottery sites - list.csv | Visualization: D3.js v7",
+                title: "Early Pottery Sites Worldwide (Canvas)",
+                citation: "Data source: early pottery sites - list.csv | Visualization: Leaflet + Canvas",
                 stats: "Loaded {n} sites",
                 play: "Play",
                 pause: "Pause",
                 reset: "Reset",
                 time: "Time",
                 filter: "Economy",
-                ageAxis: "Age (Years BP)",
-                latAxis: "Latitude",
                 legendTitle: "Economy Type",
                 tooltipName: "Site",
                 tooltipAge: "Age",
@@ -367,19 +311,19 @@
                 economyF: "Farmer",
                 economyME: "Mixed Economy",
                 economyOther: "Unknown/Other",
-                kites: "Desert Kites"
+                kites: "Desert Kites",
+                rivers: "Rivers",
+                lakes: "Lakes"
             },
             ja: {
-                title: "世界の初期土器遺跡",
-                citation: "データソース: early pottery sites - list.csv | 可視化: D3.js v7",
+                title: "世界の初期土器遺跡 (Canvas)",
+                citation: "データソース: early pottery sites - list.csv | 可視化: Leaflet + Canvas",
                 stats: "{n} 箇所の遺跡をロードしました",
                 play: "開始",
                 pause: "停止",
                 reset: "リセット",
                 time: "時間",
                 filter: "経済",
-                ageAxis: "年代 (BP年)",
-                latAxis: "緯度",
                 legendTitle: "経済タイプ",
                 tooltipName: "遺跡名",
                 tooltipAge: "年代",
@@ -392,57 +336,78 @@
                 economyF: "農耕民",
                 economyME: "混合経済",
                 economyOther: "不明/その他",
-                kites: "砂漠の凧"
+                kites: "砂漠の凧",
+                rivers: "河川",
+                lakes: "湖"
             }
         };
 
         // Economy color scale
         const economyColors = {
-            'HG': '#3498db',  // Blue - Hunter-Gatherer
-            'F': '#27ae60',   // Green - Farmer  
-            'ME': '#9b59b6',  // Purple - Mixed Economy
-            'other': '#95a5a6' // Gray - Unknown/Other
+            'HG': { r: 230, g: 80, b: 80 },  // Hunter-Gatherer
+            'F': { r: 0, g: 100, b: 110 },    // Farmer
+            'ME': { r: 115, g: 60, b: 130 },  // Mixed Economy
+            'other': { r: 149, g: 165, b: 166 } // Unknown/Other
         };
 
         // Configuration
         const config = {
-            transitionDuration: 300,
-            playSpeed: 30,
-            defaultStepSize: 50,
+            playSpeed: 50,  // ms between frames during playback
+            playStep: 50,   // years to advance per frame
             baseRadius: 6,
-            baseStroke: 0.5,
-            highlightRadiusMultiplier: 1.8
+            fadeInDuration: 500,  // ms for site to fade in
+            fadeOutDuration: 500, // ms for site to fade out
+            pulseSpeed: 2000,     // ms for one pulse cycle
+            labelDisplayTime: 2000, // ms to show label during playback
+            showTrail: true,      // show old faded points
+            showNetwork: true,    // show network connections
+            showMetaballs: true,  // show metaball visualization
+            showPrecomputedLines: true,  // show precomputed network as dotted lines
+            metaballRadius: 40,   // radius of influence for metaballs
+            metaballThreshold: 0.5, // threshold for metaball field
         };
 
         // State
         let state = {
             data: [],
             currentTime: 17000,
+            timeWindow: 1000,  // Show sites within ±N years
             isPlaying: false,
-            timer: null,
+            playInterval: null,
             lang: 'en',
             filters: {
                 HG: true,
                 F: true,
                 ME: true
-            }
+            },
+            hoveredSite: null,
+            lastLabelTime: 0,
+            lastLabelSiteId: null
         };
 
         // DOM Elements
         const slider = document.getElementById('time-slider');
+        const windowSlider = document.getElementById('window-slider');
         const timeDisplay = document.getElementById('time-display');
+        const windowDisplay = document.getElementById('window-display');
         const playBtn = document.getElementById('play-pause-btn');
         const resetBtn = document.getElementById('reset-btn');
         const langBtn = document.getElementById('lang-btn');
-        const tooltip = document.getElementById('tooltip');
         const mapContainer = document.getElementById('map-container');
-        const graphContainer = document.getElementById('graph-container');
+        const mapDateDisplay = document.getElementById('map-date-display');
+        const tooltip = document.getElementById('tooltip');
 
         // Filter checkboxes
         const filterHG = document.getElementById('filter-hg');
         const filterF = document.getElementById('filter-f');
         const filterME = document.getElementById('filter-me');
         const filterKites = document.getElementById('filter-kites');
+        const filterRivers = document.getElementById('filter-rivers');
+        const filterLakes = document.getElementById('filter-lakes');
+        const filterTrail = document.getElementById('filter-trail');
+        const filterNetwork = document.getElementById('filter-network');
+        const filterMetaballs = document.getElementById('filter-metaballs');
+        const filterPrecomputedLines = document.getElementById('filter-precomputed-lines');
 
         // Text Elements
         const titleText = document.getElementById('title-text');
@@ -462,31 +427,60 @@
             return 'other';
         }
 
+        // Helper to convert BP to BC/AD
+        function bpToBC(bp) {
+            const bc = bp - 1950;
+            if (bc > 0) {
+                return Math.round(bc).toLocaleString() + ' BC';
+            } else {
+                return Math.round(Math.abs(bc)).toLocaleString() + ' AD';
+            }
+        }
+
+        // Update map date display
+        function updateMapDateDisplay() {
+            if (mapDateDisplay) {
+                mapDateDisplay.innerHTML = `${bpToBC(state.currentTime)}<br>${Math.round(state.currentTime).toLocaleString()} BP`;
+            }
+        }
+
         // Main Initialization
         Promise.all([
-            d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json'),
             d3.csv('pottery_sites.csv'),
-            d3.json('kites.json')
-        ]).then(([worldData, csvData, kitesData]) => {
+            d3.json('kites.json'),
+            d3.json('natural_earth/rivers.geojson'),
+            d3.json('natural_earth/lakes.geojson'),
+            d3.json('natural_earth/ne_50m_coastline.geojson'),
+            d3.json('natural_earth/ne_50m_ocean.geojson'),
+            d3.json('precomputed_networks.json') // Required for network rendering
+        ]).then(([csvData, kitesData, riversData, lakesData, coastlineData, oceanData, precomputedData]) => {
+            // Load pre-computed networks (required)
+            if (precomputedData) {
+                precomputedNetworks.data = precomputedData;
+                precomputedNetworks.snapshots = precomputedData.snapshots || [];
+                precomputedNetworks.loaded = true;
+                console.log(`Loaded ${precomputedNetworks.snapshots.length} pre-computed network snapshots`);
+                console.log('Network metadata:', precomputedData.metadata);
+            } else {
+                console.error('ERROR: precomputed_networks.json is required. Run: python precompute_networks.py');
+            }
             // Process Data
             const cleanData = csvData.map((d, i) => {
-                // Parse age - handle multi-line values in CSV
-                let dateStr = d['DateBP \n(uncal) ± SD'] || d['DateBP (uncal) ± SD'] || '';
-                let calBP = d['Average date cal BP \n(INTCAL 09)'] || d['Average date cal BP (INTCAL 09)'] || '';
+                let dateStr = d['date_bp_uncal'] || d['date_bp'] || '';
+                let calBP = d['date_bp'] || '';
 
-                // Extract numeric values
                 let uncalBP = parseInt(dateStr.toString().replace(/[^\d]/g, '').slice(0, 5)) || 0;
                 let calibratedBP = parseInt(calBP.toString().replace(/[^\d]/g, '')) || uncalBP;
 
                 return {
                     id: i,
-                    name: (d['Site Name'] || '').trim(),
-                    lat: parseFloat(d.Latitude),
-                    long: parseFloat(d.Longitude),
+                    name: (d['site'] || '').trim(),
+                    lat: parseFloat(d.latitude),
+                    long: parseFloat(d.longitude),
                     uncalBP: uncalBP,
                     calBP: calibratedBP,
-                    economy: normalizeEconomy(d.Economy),
-                    retained: d.Retained === 'TRUE'
+                    economy: normalizeEconomy(d.economy),
+                    retained: d.retained === 'TRUE'
                 };
             }).filter(d =>
                 d.name &&
@@ -498,22 +492,27 @@
             );
 
             state.data = cleanData;
+            console.log(cleanData)
             updateStatsText();
 
-            // Set slider max to oldest date
-            const maxAge = Math.max(...cleanData.map(d => d.calBP));
-            slider.max = Math.ceil(maxAge / 100) * 100;
+            slider.max = 20000;
             slider.value = slider.max;
             state.currentTime = +slider.max;
+            updateMapDateDisplay();
 
             // Initial Draw
-            initVis(worldData, cleanData, kitesData);
+            initVis(cleanData, kitesData, riversData, lakesData, coastlineData, oceanData);
 
             // Event Listeners
             slider.addEventListener('input', (e) => {
                 state.currentTime = +e.target.value;
                 updateTimeDisplay();
-                updateVis();
+                updateMapDateDisplay();
+            });
+
+            windowSlider.addEventListener('input', (e) => {
+                state.timeWindow = +e.target.value;
+                updateWindowDisplay();
             });
 
             playBtn.addEventListener('click', togglePlay);
@@ -522,40 +521,49 @@
                 state.currentTime = +slider.max;
                 slider.value = slider.max;
                 updateTimeDisplay();
-                updateVis();
-                clearHighlights();
+                updateMapDateDisplay();
             });
 
-            // Filter listeners
-            filterHG.addEventListener('change', (e) => {
-                state.filters.HG = e.target.checked;
-                updateVis();
-            });
-            filterF.addEventListener('change', (e) => {
-                state.filters.F = e.target.checked;
-                updateVis();
-            });
-            filterME.addEventListener('change', (e) => {
-                state.filters.ME = e.target.checked;
-                updateVis();
-            });
+            filterHG.addEventListener('change', () => { state.filters.HG = filterHG.checked; });
+            filterF.addEventListener('change', () => { state.filters.F = filterF.checked; });
+            filterME.addEventListener('change', () => { state.filters.ME = filterME.checked; });
+
             filterKites.addEventListener('change', (e) => {
-                mapVis.toggleKites(e.target.checked);
+                canvasVis.toggleKites(e.target.checked);
+            });
+            filterRivers.addEventListener('change', (e) => {
+                canvasVis.toggleRivers(e.target.checked);
+            });
+            filterLakes.addEventListener('change', (e) => {
+                canvasVis.toggleLakes(e.target.checked);
+            });
+            filterTrail.addEventListener('change', (e) => {
+                config.showTrail = e.target.checked;
+            });
+            filterNetwork.addEventListener('change', (e) => {
+                config.showNetwork = e.target.checked;
+            });
+            filterMetaballs.addEventListener('change', (e) => {
+                config.showMetaballs = e.target.checked;
+            });
+            filterPrecomputedLines.addEventListener('change', (e) => {
+                config.showPrecomputedLines = e.target.checked;
             });
 
             langBtn.addEventListener('click', toggleLanguage);
+
+            // Mouse interaction for tooltips
+            mapContainer.addEventListener('mousemove', handleMouseMove);
+            mapContainer.addEventListener('mouseout', handleMouseOut);
         });
 
-        // Visualization Instances
-        let mapVis, graphVis;
+        // Visualization Instance
+        let canvasVis;
 
-        function initVis(worldData, data, kitesData) {
-            mapVis = new MapVis(mapContainer, worldData, data, kitesData);
-            graphVis = new GraphVis(graphContainer, data);
-
-            // Initial Update
+        function initVis(data, kitesData, riversData, lakesData, coastlineData, oceanData) {
+            canvasVis = new CanvasMapVis(mapContainer, data, kitesData, riversData, lakesData, coastlineData, oceanData);
             updateTimeDisplay();
-            updateVis();
+            updateWindowDisplay();
         }
 
         function getFilteredData() {
@@ -567,26 +575,13 @@
             });
         }
 
-        function updateVis() {
-            const filteredData = getFilteredData();
-            mapVis.update(filteredData, state.currentTime);
-            graphVis.update(filteredData, state.currentTime);
-        }
-
-        function highlightSpecimen(id) {
-            mapVis.highlight(id);
-            graphVis.highlight(id);
-        }
-
-        function clearHighlights() {
-            mapVis.highlight(null);
-            graphVis.highlight(null);
-        }
-
         function updateTimeDisplay() {
-            state.currentTime = +slider.value;
             const val = Math.round(state.currentTime);
             timeDisplay.textContent = val.toLocaleString() + i18n[state.lang].bpSuffix;
+        }
+
+        function updateWindowDisplay() {
+            windowDisplay.textContent = '±' + state.timeWindow.toLocaleString() + ' years';
         }
 
         function updateStatsText() {
@@ -594,7 +589,6 @@
             statsDisplay.innerText = text;
         }
 
-        // Language Toggle Logic
         function toggleLanguage() {
             state.lang = state.lang === 'en' ? 'ja' : 'en';
 
@@ -609,11 +603,12 @@
             timeLabel.textContent = t.time + ":";
             filterLabel.textContent = t.filter + ":";
             document.getElementById('filter-kites-label').textContent = t.kites;
+            document.getElementById('filter-rivers-label').textContent = t.rivers;
+            document.getElementById('filter-lakes-label').textContent = t.lakes;
 
             updateTimeDisplay();
 
-            mapVis.updateLanguage();
-            graphVis.updateLanguage();
+            canvasVis.updateLanguage();
         }
 
         function togglePlay() {
@@ -622,173 +617,281 @@
             playBtn.textContent = state.isPlaying ? t.pause : t.play;
 
             if (state.isPlaying) {
-                state.timer = setInterval(() => {
-                    let step = config.defaultStepSize;
-                    let newVal = +slider.value - step;
-                    if (newVal < 0) {
-                        newVal = 0;
+                state.playInterval = setInterval(() => {
+                    state.currentTime -= config.playStep;
+
+                    if (state.currentTime < 0) {
+                        state.currentTime = 0;
                         togglePlay();
+                        return;
                     }
-                    slider.value = newVal;
-                    state.currentTime = newVal;
+
+                    slider.value = state.currentTime;
                     updateTimeDisplay();
-                    updateVis();
+                    updateMapDateDisplay();
+
+                    // Show label for newly visible sites during playback
+                    const now = Date.now();
+                    if (now - state.lastLabelTime > config.labelDisplayTime) {
+                        const newSites = getFilteredData().filter(d =>
+                            d.calBP <= state.currentTime + state.timeWindow &&
+                            d.calBP >= state.currentTime - state.timeWindow &&
+                            d.id !== state.lastLabelSiteId
+                        );
+
+                        if (newSites.length > 0) {
+                            // Show label for the oldest (newest to appear) site
+                            const newestSite = newSites.reduce((a, b) => a.calBP > b.calBP ? a : b);
+                            showLabel(newestSite);
+                            state.lastLabelTime = now;
+                            state.lastLabelSiteId = newestSite.id;
+                        }
+                    }
                 }, config.playSpeed);
             } else {
-                clearInterval(state.timer);
+                clearInterval(state.playInterval);
+                hideLabel();
             }
         }
 
-        // Helper for Tooltip
-        function showTooltip(event, d) {
+        function handleMouseMove(e) {
+            if (!canvasVis) return;
+
+            const rect = mapContainer.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const site = canvasVis.getSiteAtPosition(x, y);
+
+            if (site) {
+                state.hoveredSite = site;
+                showTooltip(e.clientX, e.clientY, site);
+            } else {
+                state.hoveredSite = null;
+                hideTooltip();
+            }
+        }
+
+        function handleMouseOut() {
+            state.hoveredSite = null;
+            hideTooltip();
+        }
+
+        function showTooltip(x, y, site) {
             const t = i18n[state.lang];
-            const economyText = {
-                'HG': t.economyHG,
-                'F': t.economyF,
-                'ME': t.economyME,
-                'other': t.economyOther
-            };
-
-            tooltip.style.display = 'block';
             tooltip.innerHTML = `
-                <div class="tooltip-row"><span class="tooltip-label">${t.tooltipName}:</span> <span class="tooltip-value">${d.name}</span></div>
-                <div class="tooltip-row"><span class="tooltip-label">${t.tooltipAgeCal}:</span> <span class="tooltip-value">${d.calBP.toLocaleString()} BP</span></div>
-                <div class="tooltip-row"><span class="tooltip-label">${t.tooltipEconomy}:</span> <span class="tooltip-value">${economyText[d.economy] || economyText.other}</span></div>
-                <div class="tooltip-row"><span class="tooltip-label">${t.tooltipLat}:</span> <span class="tooltip-value">${d.lat.toFixed(2)}°</span></div>
-                <div class="tooltip-row"><span class="tooltip-label">${t.tooltipLong}:</span> <span class="tooltip-value">${d.long.toFixed(2)}°</span></div>
+                <div><strong>${site.name}</strong></div>
+                <div>${t.tooltipAgeCal}: ${site.calBP.toLocaleString()} BP</div>
+                <div>${t.tooltipEconomy}: ${t['economy' + site.economy.toUpperCase().replace('OTHER', 'Other')]}</div>
             `;
-
-            const tooltipRect = tooltip.getBoundingClientRect();
-            let left = event.pageX + 10;
-            let top = event.pageY + 10;
-
-            if (left + tooltipRect.width > window.innerWidth) {
-                left = event.pageX - tooltipRect.width - 10;
-            }
-            if (top + tooltipRect.height > window.innerHeight) {
-                top = event.pageY - tooltipRect.height - 10;
-            }
-
-            tooltip.style.left = left + 'px';
-            tooltip.style.top = top + 'px';
+            tooltip.style.left = (x + 15) + 'px';
+            tooltip.style.top = (y + 15) + 'px';
+            tooltip.classList.add('visible');
         }
 
-        // --- VISUALIZATION CLASSES ---
+        function hideTooltip() {
+            tooltip.classList.remove('visible');
+        }
 
-        class MapVis {
-            constructor(container, worldData, allData, kitesData) {
-                this.container = container;
-                this.worldData = worldData;
-                this.kitesData = kitesData;
-                this.width = container.getBoundingClientRect().width;
-                this.height = container.getBoundingClientRect().height;
-                this.currentZoom = 1;
+        let currentLabelTimeout = null;
 
-                this.svg = d3.select(container).append('svg')
-                    .attr('width', '100%')
-                    .attr('height', '100%')
-                    .attr('viewBox', `0 0 ${this.width} ${this.height}`)
-                    .on('click', (e) => {
-                        if (e.target.tagName !== 'circle') {
-                            clearHighlights();
-                        }
-                    });
+        function showLabel(site) {
+            if (!canvasVis) return;
 
-                // Add Zoom Behavior
-                const zoom = d3.zoom()
-                    .scaleExtent([1, 8])
-                    .on('zoom', (event) => {
-                        this.currentZoom = event.transform.k;
-                        this.mapGroup.attr('transform', event.transform);
+            const point = canvasVis.map.latLngToContainerPoint([site.lat, site.long]);
+            const rect = mapContainer.getBoundingClientRect();
 
-                        if (this.kitesGroup) {
-                            this.kitesGroup.selectAll('circle')
-                                .attr('r', 2 / this.currentZoom);
-                        }
+            tooltip.innerHTML = `<strong>${site.name}</strong>`;
+            tooltip.style.left = (rect.left + point.x + 15) + 'px';
+            tooltip.style.top = (rect.top + point.y - 30) + 'px';
+            tooltip.classList.add('visible');
 
-                        this.pointsGroup.selectAll('circle')
-                            .attr('r', d => (d.highlighted ? config.baseRadius * config.highlightRadiusMultiplier : config.baseRadius) / this.currentZoom)
-                            .attr('stroke-width', d => (d.highlighted ? 2 : config.baseStroke) / this.currentZoom);
-
-                        this.mapGroup.selectAll('.country')
-                            .attr('stroke-width', 0.5 / this.currentZoom);
-
-                        this.mapGroup.selectAll('.graticule')
-                            .attr('stroke-width', 0.5 / this.currentZoom);
-                    });
-
-                this.svg.call(zoom);
-
-                this.mapGroup = this.svg.append('g');
-
-                this.projection = d3.geoEquirectangular()
-                    .translate([this.width / 2, this.height / 2])
-                    .scale(this.width / 6.5)
-                    .rotate([-10, 0]);
-
-                this.path = d3.geoPath().projection(this.projection);
-
-                this.initMap();
-                this.renderLegend();
-
-                window.addEventListener('resize', () => {
-                    this.width = container.getBoundingClientRect().width;
-                    this.height = container.getBoundingClientRect().height;
-                    this.projection.translate([this.width / 2, this.height / 2]).scale(this.width / 6.5);
-                    this.mapGroup.selectAll('path').attr('d', this.path);
-                    this.update(getFilteredData(), state.currentTime);
-                });
+            if (currentLabelTimeout) {
+                clearTimeout(currentLabelTimeout);
             }
 
-            initMap() {
-                const countries = topojson.feature(this.worldData, this.worldData.objects.countries);
+            currentLabelTimeout = setTimeout(() => {
+                hideLabel();
+            }, config.labelDisplayTime);
+        }
 
-                this.mapGroup.append('path')
-                    .datum(d3.geoGraticule())
-                    .attr('class', 'graticule')
-                    .attr('d', this.path);
+        function hideLabel() {
+            tooltip.classList.remove('visible');
+        }
 
-                this.mapGroup.append('g')
-                    .selectAll('path')
-                    .data(countries.features)
-                    .enter().append('path')
-                    .attr('class', 'country')
-                    .attr('d', this.path);
+        // --- PRECOMPUTED NETWORK DATA ---
 
-                this.kitesGroup = this.mapGroup.append('g').attr('class', 'kites-layer').style('display', 'none');
+        // Global obstacle data (for visualization only)
+        let obstacleData = {
+            mountains: null,
+            coastlines: null,
+            loaded: false
+        };
 
-                // Draw Kites
-                if (this.kitesData && this.kitesData.features) {
-                    this.kitesGroup.selectAll('circle')
-                        .data(this.kitesData.features)
-                        .enter().append('circle')
-                        .attr('cx', d => this.projection(d.geometry.coordinates)[0])
-                        .attr('cy', d => this.projection(d.geometry.coordinates)[1])
-                        .attr('r', 2)
-                        .attr('fill', '#e74c3c')
-                        .attr('opacity', 0.6)
-                        .attr('stroke', 'none')
-                        .on('mouseover', (event, d) => {
-                            const t = i18n[state.lang];
-                            tooltip.style.display = 'block';
-                            tooltip.innerHTML = `
-                                <div class="tooltip-row"><span class="tooltip-label">${t.kites}:</span> <span class="tooltip-value">${d.properties.Kglob || 'Unknown'}</span></div>
-                                <div class="tooltip-row"><span class="tooltip-label">Type:</span> <span class="tooltip-value">${d.properties.Type || 'kite'}</span></div>
-                            `;
-                            const tooltipRect = tooltip.getBoundingClientRect();
-                            let left = event.pageX + 10;
-                            let top = event.pageY + 10;
-                            if (left + tooltipRect.width > window.innerWidth) left = event.pageX - tooltipRect.width - 10;
-                            if (top + tooltipRect.height > window.innerHeight) top = event.pageY - tooltipRect.height - 10;
-                            tooltip.style.left = left + 'px';
-                            tooltip.style.top = top + 'px';
-                        })
-                        .on('mouseout', () => {
-                            tooltip.style.display = 'none';
+        // Pre-computed networks data
+        let precomputedNetworks = {
+            data: null,
+            loaded: false,
+            snapshots: []
+        };
+
+        // --- CANVAS VISUALIZATION CLASS ---
+        //
+        // This visualization is RENDER-ONLY - all network computation is done offline.
+        // To generate/update the network data, run: python precompute_networks.py
+        //
+        // The precomputed_networks.json file contains:
+        // - Network edges (minimum spanning tree with terrain avoidance)
+        // - Metaball influence points (for smooth visualization)
+        // - Metadata about computation settings
+        //
+
+        class CanvasMapVis {
+            constructor(container, allData, kitesData, riversData, lakesData, coastlineData, oceanData) {
+                this.container = container;
+                this.allData = allData;
+                this.kitesData = kitesData;
+                this.riversData = riversData;
+                this.lakesData = lakesData;
+                this.coastlineData = coastlineData;
+                this.oceanData = oceanData;
+
+                this.showKites = false;
+                this.showRivers = true;
+                this.showLakes = true;
+
+                // Network cache
+                this.networkCache = null;
+                this.lastCacheParams = null;
+
+                // Initialize Leaflet map
+                this.map = L.map(container, {
+                    crs: L.CRS.EPSG4326,
+                    center: [0, 0],
+                    zoom: 2,
+                    minZoom: 1,
+                    maxZoom: 6
+                });
+
+                // Add Natural Earth raster
+                const imageBounds = [[-90, -180], [90, 180]];
+                // L.imageOverlay('./natural_earth/NE1_HR_LC_SR_W_4326.png', imageBounds, {
+                //     attribution: 'Natural Earth',
+                // }).addTo(this.map)
+                L.imageOverlay('basemaps/world_hillshade_4326.png', imageBounds, {
+                    attribution: 'ESRI World Hillshade',
+                    opacity: 1.0
+                }).addTo(this.map)
+
+                // Add Natural Earth ocean and coastline
+                this.oceanLayer = L.geoJSON(oceanData, {
+                    style: {
+                        color: '#2E5266',
+                        weight: 0,
+                        fillColor: '#4A90E2',
+                        fillOpacity: 0.2
+                    }
+                }).addTo(this.map);
+
+                this.coastlineLayer = L.geoJSON(coastlineData, {
+                    style: {
+                        color: '#333333',
+                        weight: 1,
+                        opacity: 0.5
+                    }
+                }).addTo(this.map);
+
+                // Add GeoJSON layers
+                this.kitesLayer = L.layerGroup();
+                if (kitesData && kitesData.features) {
+                    kitesData.features.forEach(feature => {
+                        const coords = feature.geometry.coordinates;
+                        const marker = L.circleMarker([coords[1], coords[0]], {
+                            radius: 3,
+                            fillColor: '#e74c3c',
+                            color: 'none',
+                            fillOpacity: 0.6
                         });
+                        this.kitesLayer.addLayer(marker);
+                    });
                 }
 
-                this.pointsGroup = this.mapGroup.append('g');
+                this.riversLayer = L.geoJSON(riversData, {
+                    style: {
+                        color: '#4A90E2',
+                        weight: 1,
+                        opacity: 0.6
+                    }
+                }).addTo(this.map);
+
+                this.lakesLayer = L.geoJSON(lakesData, {
+                    style: {
+                        color: '#4A90E2',
+                        weight: 1,
+                        fillColor: '#A8D5F7',
+                        fillOpacity: 0.3,
+                        opacity: 0.6
+                    }
+                }).addTo(this.map);
+
+                // Create canvas overlay
+                this.canvas = document.createElement('canvas');
+                this.canvas.id = 'canvas-overlay';
+                this.ctx = this.canvas.getContext('2d');
+                this.container.appendChild(this.canvas);
+
+                // Size canvas to match container
+                this.resizeCanvas();
+                window.addEventListener('resize', () => this.resizeCanvas());
+
+                // Initialize land mask flag
+                this.landMaskNeedsUpdate = true;
+
+                // Listen to map events
+                this.map.on('move zoom viewreset', () => {
+                    this.landMaskNeedsUpdate = true;
+                    this.render();
+                });
+
+                // Render legend
+                this.renderLegend();
+
+                // Start animation loop
+                this.startAnimationLoop();
+            }
+
+            resizeCanvas() {
+                const rect = this.container.getBoundingClientRect();
+                this.canvas.width = rect.width;
+                this.canvas.height = rect.height;
+                this.render();
+            }
+
+            toggleKites(show) {
+                this.showKites = show;
+                if (show) {
+                    this.map.addLayer(this.kitesLayer);
+                } else {
+                    this.map.removeLayer(this.kitesLayer);
+                }
+            }
+
+            toggleRivers(show) {
+                this.showRivers = show;
+                if (show) {
+                    this.map.addLayer(this.riversLayer);
+                } else {
+                    this.map.removeLayer(this.riversLayer);
+                }
+            }
+
+            toggleLakes(show) {
+                this.showLakes = show;
+                if (show) {
+                    this.map.addLayer(this.lakesLayer);
+                } else {
+                    this.map.removeLayer(this.lakesLayer);
+                }
             }
 
             renderLegend() {
@@ -812,7 +915,7 @@
                     const div = legend.append("div").attr("class", "legend-item");
                     div.append("div")
                         .attr("class", "legend-color")
-                        .style("background-color", item.color);
+                        .style("background-color", `rgb(${item.color.r}, ${item.color.g}, ${item.color.b})`);
                     div.append("span").text(item.label);
                 });
             }
@@ -825,315 +928,510 @@
                 this.renderLegend();
             }
 
-            toggleKites(show) {
-                if (this.kitesGroup) {
-                    this.kitesGroup.style('display', show ? 'block' : 'none');
-                }
+            startAnimationLoop() {
+                const animate = () => {
+                    this.render();
+                    this.animationFrame = requestAnimationFrame(animate);
+                };
+                animate();
             }
 
-            update(data, sliderVal) {
-                const visibleData = data.filter(d => d.calBP >= sliderVal);
+            getVisibleSites() {
+                const filtered = getFilteredData();
+                const currentTime = state.currentTime;
+                const window = state.timeWindow;
 
-                const circles = this.pointsGroup.selectAll('circle')
-                    .data(visibleData, d => d.id);
+                return filtered.filter(d => {
+                    const age = d.calBP;
+                    return (age - window) <= currentTime && age >= currentTime;
+                }).map(d => {
+                    // Calculate animation state
+                    const age = d.calBP;
+                    const timeSinceAppearance = age - currentTime;
+                    const timeUntilDisappearance = currentTime - (age - window);
 
-                circles.enter()
-                    .append('circle')
-                    .attr('class', 'data-point')
-                    .attr('cx', d => this.projection([d.long, d.lat])[0])
-                    .attr('cy', d => this.projection([d.long, d.lat])[1])
-                    .attr('r', 0)
-                    .attr('fill', d => economyColors[d.economy] || economyColors.other)
-                    .attr('fill-opacity', 0.85)
-                    .attr('stroke', '#fff')
-                    .attr('stroke-width', config.baseStroke / this.currentZoom)
-                    .on('mouseover', (event, d) => {
-                        showTooltip(event, d);
-                        if (!d.highlighted) {
-                            d3.select(event.target).attr('stroke', '#000').attr('stroke-width', 2 / this.currentZoom);
-                        }
-                    })
-                    .on('mouseout', (event, d) => {
-                        tooltip.style.display = 'none';
-                        if (!d.highlighted) {
-                            d3.select(event.target).attr('stroke', '#fff').attr('stroke-width', config.baseStroke / this.currentZoom);
-                        }
-                    })
-                    .on('click', (event, d) => {
-                        event.stopPropagation();
-                        highlightSpecimen(d.id);
-                    })
-                    .transition().duration(config.transitionDuration)
-                    .attr('r', d => (d.highlighted ? config.baseRadius * config.highlightRadiusMultiplier : config.baseRadius) / this.currentZoom);
+                    let opacity = 1.0;
+                    let radiusMultiplier = 1.0;
 
-                circles
-                    .attr('cx', d => this.projection([d.long, d.lat])[0])
-                    .attr('cy', d => this.projection([d.long, d.lat])[1])
-                    .attr('fill', d => economyColors[d.economy] || economyColors.other)
-                    .attr('r', d => (d.highlighted ? config.baseRadius * config.highlightRadiusMultiplier : config.baseRadius) / this.currentZoom)
-                    .attr('stroke-width', d => (d.highlighted ? 2 : config.baseStroke) / this.currentZoom);
+                    // Immediate appearance with pulse, then fade out
+                    if (timeSinceAppearance < config.fadeInDuration) {
+                        // Starts at 1.5 and shrinks smoothly to 1.0
+                        const progress = Math.min(1, timeSinceAppearance / config.fadeInDuration);
+                        radiusMultiplier = 1.0 + 0.5 * Math.cos(progress * (Math.PI / 2));
+                    } else {
+                        // After pulse, shrink slightly while fading
+                        const shrinkProgress = Math.min(1, (timeSinceAppearance - config.fadeInDuration) / config.fadeOutDuration);
+                        radiusMultiplier = 1.0 - 0.3 * shrinkProgress;
+                    }
 
-                circles.exit()
-                    .transition().duration(config.transitionDuration)
-                    .attr('r', 0)
-                    .remove();
-            }
+                    // Fade out
+                    if (timeUntilDisappearance < config.fadeOutDuration) {
+                        opacity = timeUntilDisappearance / config.fadeOutDuration;
+                    }
 
-            highlight(id) {
-                if (id === null) {
-                    this.pointsGroup.selectAll('circle')
-                        .each(function (d) { d.highlighted = false; })
-                        .classed('highlighted-point', false)
-                        .attr('r', config.baseRadius / this.currentZoom)
-                        .attr('stroke', '#fff')
-                        .attr('stroke-width', config.baseStroke / this.currentZoom);
-                    return;
-                }
+                    // Calculate recency for glow effect
+                    const recency = 1 - timeUntilDisappearance / (2 * window);
 
-                this.pointsGroup.selectAll('circle')
-                    .each(function (d) {
-                        d.highlighted = (d.id === id);
-                    })
-                    .classed('highlighted-point', d => d.highlighted)
-                    .attr('r', d => (d.highlighted ? config.baseRadius * config.highlightRadiusMultiplier : config.baseRadius) / this.currentZoom)
-                    .attr('stroke', d => d.highlighted ? '#000' : '#fff')
-                    .attr('stroke-width', d => (d.highlighted ? 2 : config.baseStroke) / this.currentZoom);
-            }
-        }
-
-        class GraphVis {
-            constructor(container, allData) {
-                this.container = container;
-                this.width = container.getBoundingClientRect().width;
-                this.height = container.getBoundingClientRect().height;
-                this.margin = { top: 20, right: 30, bottom: 50, left: 60 };
-
-                this.svg = d3.select(container).append('svg')
-                    .attr('width', '100%')
-                    .attr('height', '100%')
-                    .on('click', (e) => {
-                        if (e.target.tagName !== 'circle') {
-                            clearHighlights();
-                        }
-                    })
-                    .on('mousemove', (e) => {
-                        this.updateGuides(e);
-                    })
-                    .on('mouseout', () => {
-                        this.hideGuides();
-                    });
-
-                this.innerWidth = this.width - this.margin.left - this.margin.right;
-                this.innerHeight = this.height - this.margin.top - this.margin.bottom;
-
-                this.chartGroup = this.svg.append('g')
-                    .attr('transform', `translate(${this.margin.left},${this.margin.top})`);
-
-                // Find max age for x-scale
-                this.maxAge = Math.max(...allData.map(d => d.calBP));
-
-                this.xScale = d3.scaleLinear()
-                    .domain([this.maxAge, 0])
-                    .range([0, this.innerWidth]);
-
-                this.yScale = d3.scaleLinear()
-                    .domain([-90, 90])
-                    .range([this.innerHeight, 0]);
-
-                this.initGraph(allData);
-
-                window.addEventListener('resize', () => {
-                    this.width = container.getBoundingClientRect().width;
-                    this.height = container.getBoundingClientRect().height;
-                    this.innerWidth = this.width - this.margin.left - this.margin.right;
-                    this.innerHeight = this.height - this.margin.top - this.margin.bottom;
-
-                    this.xScale.range([0, this.innerWidth]);
-                    this.yScale.range([this.innerHeight, 0]);
-
-                    this.svg.selectAll('*').remove();
-                    this.chartGroup = this.svg.append('g').attr('transform', `translate(${this.margin.left},${this.margin.top})`);
-                    this.drawAxes();
-                    this.drawGuides();
-                    this.drawBackgroundDots(state.data);
-                    this.update(getFilteredData(), state.currentTime);
+                    return {
+                        ...d,
+                        opacity: Math.max(0, Math.min(1, opacity)),
+                        radius: config.baseRadius * radiusMultiplier,
+                        recency: recency
+                    };
                 });
             }
 
-            initGraph(data) {
-                this.drawAxes();
-                this.drawGuides();
-                this.drawBackgroundDots(data);
+            getOldSites() {
+                const filtered = getFilteredData();
+                const currentTime = state.currentTime;
+                const window = state.timeWindow;
+
+                // Sites that are older than current time window
+                return filtered.filter(d => d.calBP > currentTime + window);
             }
 
-            drawAxes() {
-                const xAxis = d3.axisBottom(this.xScale)
-                    .tickFormat(d => d >= 1000 ? (d / 1000) + 'k' : d);
-                const yAxis = d3.axisLeft(this.yScale);
-                const t = i18n[state.lang];
-
-                this.chartGroup.append('g')
-                    .attr('class', 'axis x-axis')
-                    .attr('transform', `translate(0,${this.innerHeight})`)
-                    .call(xAxis);
-
-                this.xAxisLabel = this.chartGroup.append('text')
-                    .attr('class', 'axis-label')
-                    .attr('x', this.innerWidth / 2)
-                    .attr('y', this.innerHeight + 40)
-                    .style('text-anchor', 'middle')
-                    .text(t.ageAxis);
-
-                this.chartGroup.append('g')
-                    .attr('class', 'axis y-axis')
-                    .call(yAxis);
-
-                this.yAxisLabel = this.chartGroup.append('text')
-                    .attr('class', 'axis-label')
-                    .attr('transform', 'rotate(-90)')
-                    .attr('x', -this.innerHeight / 2)
-                    .attr('y', -45)
-                    .style('text-anchor', 'middle')
-                    .text(t.latAxis);
-
-                // Equator line
-                this.chartGroup.append('line')
-                    .attr('x1', 0)
-                    .attr('x2', this.innerWidth)
-                    .attr('y1', this.yScale(0))
-                    .attr('y2', this.yScale(0))
-                    .attr('stroke', '#ccc')
-                    .attr('stroke-dasharray', '3 3');
-
-                this.timeLine = this.chartGroup.append('line')
-                    .attr('class', 'timewindow-line')
-                    .attr('y1', 0)
-                    .attr('y2', this.innerHeight)
-                    .style('display', 'none');
-            }
-
-            drawGuides() {
-                this.guideX = this.chartGroup.append('line')
-                    .attr('class', 'guide-line')
-                    .attr('y1', 0)
-                    .attr('y2', this.innerHeight);
-
-                this.guideY = this.chartGroup.append('line')
-                    .attr('class', 'guide-line')
-                    .attr('x1', 0)
-                    .attr('x2', this.innerWidth);
-            }
-
-            updateGuides(event) {
-                if (!this.guideX || !this.guideY) return;
-
-                const [x, y] = d3.pointer(event, this.chartGroup.node());
-
-                if (x >= 0 && x <= this.innerWidth && y >= 0 && y <= this.innerHeight) {
-                    this.guideX.attr('x1', x).attr('x2', x).style('display', 'block');
-                    this.guideY.attr('y1', y).attr('y2', y).style('display', 'block');
-                } else {
-                    this.hideGuides();
+            computeNetwork(networkPoints, currentTime) {
+                // Only use pre-computed networks (no runtime computation)
+                if (precomputedNetworks.loaded) {
+                    return this.getPrecomputedNetwork(currentTime);
                 }
+
+                // Return empty if no precomputed data available
+                console.warn('No precomputed network data available');
+                return { edges: [], metaballPoints: [] };
             }
 
-            hideGuides() {
-                if (this.guideX) this.guideX.style('display', 'none');
-                if (this.guideY) this.guideY.style('display', 'none');
+            getPrecomputedNetwork(currentTime) {
+                // Find closest snapshot by time
+                let closestSnapshot = null;
+                let minDiff = Infinity;
+
+                for (const snapshot of precomputedNetworks.snapshots) {
+                    const diff = Math.abs(snapshot.time - currentTime);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        closestSnapshot = snapshot;
+                    }
+                }
+
+                if (!closestSnapshot || !closestSnapshot.edges) {
+                    return { edges: [], metaballPoints: [] };
+                }
+
+                // Convert pre-computed edges to canvas coordinates
+                const edges = closestSnapshot.edges.map(edge => {
+                    const p1 = this.map.latLngToContainerPoint([edge.from_lat, edge.from_lng]);
+                    const p2 = this.map.latLngToContainerPoint([edge.to_lat, edge.to_lng]);
+
+                    return {
+                        p1: { x: p1.x, y: p1.y },
+                        p2: { x: p2.x, y: p2.y },
+                        dist: edge.cost || 0
+                    };
+                });
+
+                // Convert precomputed metaball points to canvas coordinates
+                let metaballPoints = [];
+                if (closestSnapshot.metaball_points) {
+                    metaballPoints = closestSnapshot.metaball_points.map(point => {
+                        const p = this.map.latLngToContainerPoint([point[0], point[1]]);
+                        return { x: p.x, y: p.y };
+                    });
+                }
+
+                // Store snapshot for use in rendering
+                this.currentSnapshot = closestSnapshot;
+
+                return { edges, metaballPoints };
             }
 
-            updateLanguage() {
-                const t = i18n[state.lang];
-                if (this.xAxisLabel) this.xAxisLabel.text(t.ageAxis);
-                if (this.yAxisLabel) this.yAxisLabel.text(t.latAxis);
-            }
+            // Create a land mask from ocean polygons (inverted)
+            createLandMask() {
+                if (!this.landMaskCanvas) {
+                    this.landMaskCanvas = document.createElement('canvas');
+                    this.landMaskCtx = this.landMaskCanvas.getContext('2d', { alpha: true, willReadFrequently: false });
+                }
 
-            drawBackgroundDots(data) {
-                this.chartGroup.selectAll('.bg-dot')
-                    .data(data)
-                    .enter().append('circle')
-                    .attr('class', 'bg-dot')
-                    .attr('cx', d => this.xScale(d.calBP))
-                    .attr('cy', d => this.yScale(d.lat))
-                    .attr('r', 2)
-                    .attr('fill', '#eee');
-            }
+                const width = this.canvas.width;
+                const height = this.canvas.height;
 
-            update(data, sliderVal) {
-                const visibleData = data.filter(d => d.calBP >= sliderVal);
+                // Resize if needed
+                if (this.landMaskCanvas.width !== width || this.landMaskCanvas.height !== height) {
+                    this.landMaskCanvas.width = width;
+                    this.landMaskCanvas.height = height;
+                    this.landMaskNeedsUpdate = true;
+                }
 
-                const circles = this.chartGroup.selectAll('.active-dot')
-                    .data(visibleData, d => d.id);
+                // Only regenerate if needed (on resize or map move)
+                if (!this.landMaskNeedsUpdate) return;
 
-                circles.enter()
-                    .append('circle')
-                    .attr('class', 'active-dot')
-                    .attr('cx', d => this.xScale(d.calBP))
-                    .attr('cy', d => this.yScale(d.lat))
-                    .attr('r', 0)
-                    .attr('fill', d => economyColors[d.economy] || economyColors.other)
-                    .attr('stroke', '#333')
-                    .attr('stroke-width', 0.5)
-                    .on('mouseover', (event, d) => {
-                        showTooltip(event, d);
-                        d3.select(event.target).attr('stroke', '#000').attr('stroke-width', 2);
-                    })
-                    .on('mouseout', (event) => {
-                        tooltip.style.display = 'none';
-                        if (!d3.select(event.target).classed('selected')) {
-                            d3.select(event.target).attr('stroke', '#333').attr('stroke-width', 0.5);
+                const ctx = this.landMaskCtx;
+                ctx.clearRect(0, 0, width, height);
+
+                // Fill entire canvas with white (land)
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, width, height);
+
+                // Cut out ocean areas (make them transparent)
+                if (this.oceanData && this.oceanData.features) {
+                    ctx.globalCompositeOperation = 'destination-out';
+                    ctx.fillStyle = 'black';
+
+                    this.oceanData.features.forEach(feature => {
+                        if (feature.geometry.type === 'Polygon') {
+                            this.drawPolygonToCanvas(ctx, feature.geometry.coordinates);
+                        } else if (feature.geometry.type === 'MultiPolygon') {
+                            feature.geometry.coordinates.forEach(polygon => {
+                                this.drawPolygonToCanvas(ctx, polygon);
+                            });
                         }
-                    })
-                    .on('click', (event, d) => {
-                        event.stopPropagation();
-                        highlightSpecimen(d.id);
-                    })
-                    .transition().duration(200)
-                    .attr('r', 4);
+                    });
 
-                circles.exit()
-                    .transition().duration(200)
-                    .attr('r', 0)
-                    .remove();
-
-                circles
-                    .attr('cx', d => this.xScale(d.calBP))
-                    .attr('cy', d => this.yScale(d.lat))
-                    .attr('fill', d => economyColors[d.economy] || economyColors.other);
-
-                if (this.timeLine) {
-                    this.timeLine
-                        .style('display', 'block')
-                        .attr('x1', this.xScale(sliderVal))
-                        .attr('x2', this.xScale(sliderVal));
-                    this.timeLine.raise();
+                    ctx.globalCompositeOperation = 'source-over';
                 }
+
+                this.landMaskNeedsUpdate = false;
             }
 
-            highlight(id) {
-                if (id === null) {
-                    this.chartGroup.selectAll('.active-dot')
-                        .classed('selected', false)
-                        .attr('stroke', '#333')
-                        .attr('stroke-width', 0.5)
-                        .attr('r', 4);
+            // Helper to draw GeoJSON polygon to canvas
+            drawPolygonToCanvas(ctx, coordinates) {
+                coordinates.forEach((ring, ringIndex) => {
+                    ctx.beginPath();
+                    ring.forEach((coord, i) => {
+                        const point = this.map.latLngToContainerPoint([coord[1], coord[0]]);
+                        if (i === 0) {
+                            ctx.moveTo(point.x, point.y);
+                        } else {
+                            ctx.lineTo(point.x, point.y);
+                        }
+                    });
+                    ctx.closePath();
+                    ctx.fill();
+                });
+            }
+
+            // Render metaballs using precomputed influence points
+            renderMetaballs(edges, precomputedPoints) {
+                if (!config.showMetaballs || edges.length === 0) return;
+
+                const ctx = this.ctx;
+                const width = this.canvas.width;
+                const height = this.canvas.height;
+
+                // Use only precomputed points (no fallback)
+                if (!precomputedPoints || precomputedPoints.length === 0) {
+                    console.warn('No precomputed metaball points available');
                     return;
                 }
 
-                this.chartGroup.selectAll('.active-dot')
-                    .classed('selected', false)
-                    .attr('stroke', '#333')
-                    .attr('stroke-width', 0.5)
-                    .attr('r', 4);
+                let influencePoints = precomputedPoints;
 
-                const dot = this.chartGroup.selectAll('.active-dot')
-                    .filter(d => d.id === id);
+                // Filter points that are on-screen or near the screen
+                const margin = config.metaballRadius * 2;
+                influencePoints = influencePoints.filter(p =>
+                    p.x >= -margin && p.x <= width + margin &&
+                    p.y >= -margin && p.y <= height + margin
+                );
 
-                dot.classed('selected', true)
-                    .attr('stroke', '#000')
-                    .attr('stroke-width', 2)
-                    .transition().duration(200)
-                    .attr('r', 8);
+                if (influencePoints.length === 0) return;
+
+                // Create a lower resolution field for performance
+                const resolution = 8; // Increased from 6 for better performance
+                const fieldWidth = Math.ceil(width / resolution);
+                const fieldHeight = Math.ceil(height / resolution);
+
+                // Build spatial index for faster lookup
+                const cellSize = config.metaballRadius;
+                const gridCols = Math.ceil(width / cellSize);
+                const gridRows = Math.ceil(height / cellSize);
+                const spatialGrid = new Array(gridRows);
+                for (let i = 0; i < gridRows; i++) {
+                    spatialGrid[i] = new Array(gridCols);
+                    for (let j = 0; j < gridCols; j++) {
+                        spatialGrid[i][j] = [];
+                    }
+                }
+
+                // Assign points to spatial grid
+                for (const point of influencePoints) {
+                    const gridX = Math.floor(point.x / cellSize);
+                    const gridY = Math.floor(point.y / cellSize);
+                    if (gridX >= 0 && gridX < gridCols && gridY >= 0 && gridY < gridRows) {
+                        spatialGrid[gridY][gridX].push(point);
+                    }
+                }
+
+                // Compute field values using metaball formula with spatial culling
+                const field = new Array(fieldHeight);
+                const radiusSq = config.metaballRadius * config.metaballRadius;
+
+                for (let y = 0; y < fieldHeight; y++) {
+                    field[y] = new Array(fieldWidth);
+                    for (let x = 0; x < fieldWidth; x++) {
+                        const px = x * resolution;
+                        const py = y * resolution;
+
+                        // Find which spatial grid cells to check
+                        const minGridX = Math.max(0, Math.floor((px - config.metaballRadius) / cellSize));
+                        const maxGridX = Math.min(gridCols - 1, Math.floor((px + config.metaballRadius) / cellSize));
+                        const minGridY = Math.max(0, Math.floor((py - config.metaballRadius) / cellSize));
+                        const maxGridY = Math.min(gridRows - 1, Math.floor((py + config.metaballRadius) / cellSize));
+
+                        let value = 0;
+
+                        // Only check nearby grid cells
+                        for (let gy = minGridY; gy <= maxGridY; gy++) {
+                            for (let gx = minGridX; gx <= maxGridX; gx++) {
+                                const nearbyPoints = spatialGrid[gy][gx];
+
+                                for (const point of nearbyPoints) {
+                                    const dx = px - point.x;
+                                    const dy = py - point.y;
+                                    const distSq = dx * dx + dy * dy;
+
+                                    if (distSq < radiusSq && distSq > 0.1) {
+                                        // Metaball falloff function: r²/d²
+                                        value += radiusSq / distSq;
+                                    } else if (distSq <= 0.1) {
+                                        // Very close to center - max value
+                                        value += radiusSq / 0.1;
+                                    }
+                                }
+                            }
+                        }
+
+                        field[y][x] = value;
+                    }
+                }
+
+                // Use compositing for smooth blending
+                ctx.save();
+
+                // Reuse or create temporary canvas for metaball rendering
+                if (!this.metaballCanvas || this.metaballCanvas.width !== width || this.metaballCanvas.height !== height) {
+                    this.metaballCanvas = document.createElement('canvas');
+                    this.metaballCanvas.width = width;
+                    this.metaballCanvas.height = height;
+                    this.metaballCtx = this.metaballCanvas.getContext('2d', { alpha: true, willReadFrequently: false });
+                }
+
+                const tempCtx = this.metaballCtx;
+                tempCtx.clearRect(0, 0, width, height);
+
+                // Batch rendering by collecting rectangles of similar colors
+                const threshold = config.metaballThreshold;
+
+                for (let y = 0; y < fieldHeight; y++) {
+                    for (let x = 0; x < fieldWidth; x++) {
+                        const value = field[y][x];
+
+                        if (value > threshold) {
+                            // Create smooth color gradient based on field strength
+                            const intensity = Math.min(1, (value - threshold) / 3);
+                            const alpha = Math.min(0.35, intensity * 0.35);
+
+                            const r = Math.floor(149 - intensity * 100);
+                            const g = Math.floor(165 - intensity * 100);
+                            const b = Math.floor(166 - intensity * 100);
+
+                            tempCtx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                            tempCtx.fillRect(x * resolution, y * resolution, resolution + 1, resolution + 1);
+                        }
+                    }
+                }
+
+                // Create land mask
+                this.createLandMask();
+
+                // Apply land mask to metaballs using destination-in compositing
+                if (this.landMaskCanvas) {
+                    tempCtx.globalCompositeOperation = 'destination-in';
+                    tempCtx.drawImage(this.landMaskCanvas, 0, 0);
+                    tempCtx.globalCompositeOperation = 'source-over';
+                }
+
+                // Apply blur for smoother metaballs
+                ctx.filter = 'blur(6px)';
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.drawImage(this.metaballCanvas, 0, 0);
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.filter = 'none';
+
+                ctx.restore();
+            }
+
+            render() {
+                const ctx = this.ctx;
+                ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+                // Draw old sites trail (faded gray points)
+                if (config.showTrail) {
+                    const oldSites = this.getOldSites();
+
+                    // Draw network connections between old sites
+                    if (config.showNetwork && oldSites.length >= 2) {
+                        const networkPoints = oldSites.map(site => {
+                            const point = this.map.latLngToContainerPoint([site.lat, site.long]);
+                            return {
+                                x: point.x,
+                                y: point.y,
+                                id: site.id,
+                                lat: site.lat,
+                                long: site.long
+                            };
+                        }).filter(p =>
+                            p.x >= -200 && p.x <= this.canvas.width + 200 &&
+                            p.y >= -200 && p.y <= this.canvas.height + 200
+                        );
+
+                        if (networkPoints.length >= 2) {
+                            // Use cached network computation (or pre-computed)
+                            const networkData = this.computeNetwork(networkPoints, state.currentTime);
+                            const edges = networkData.edges || networkData; // Handle both old and new format
+                            const metaballPoints = networkData.metaballPoints || null;
+
+                            // Draw metaballs visualization
+                            if (config.showMetaballs) {
+                                this.renderMetaballs(edges, metaballPoints);
+                            }
+
+                            // Draw network edges
+                            if (!config.showMetaballs) {
+                                ctx.strokeStyle = 'rgba(140, 140, 140, 0.5)';
+                                ctx.lineWidth = 1.5;
+                                ctx.setLineDash([3, 3]);
+
+                                edges.forEach(edge => {
+                                    ctx.beginPath();
+                                    ctx.moveTo(edge.p1.x, edge.p1.y);
+                                    ctx.lineTo(edge.p2.x, edge.p2.y);
+                                    ctx.stroke();
+                                });
+
+                                ctx.setLineDash([]);
+                            }
+
+                            // Draw precomputed network lines on top (if enabled)
+                            if (config.showPrecomputedLines && this.currentSnapshot && this.currentSnapshot.edges) {
+                                ctx.strokeStyle = 'rgba(80, 120, 180, 0.7)';
+                                ctx.lineWidth = 2;
+                                ctx.setLineDash([5, 5]);
+
+                                this.currentSnapshot.edges.forEach(edge => {
+                                    // Draw full LCP path if available
+                                    if (edge.path && edge.path.length > 0) {
+                                        ctx.beginPath();
+                                        edge.path.forEach((point, i) => {
+                                            const p = this.map.latLngToContainerPoint([point[0], point[1]]);
+                                            if (i === 0) {
+                                                ctx.moveTo(p.x, p.y);
+                                            } else {
+                                                ctx.lineTo(p.x, p.y);
+                                            }
+                                        });
+                                        ctx.stroke();
+                                    } else {
+                                        // Fallback to straight line
+                                        const p1 = this.map.latLngToContainerPoint([edge.from_lat, edge.from_lng]);
+                                        const p2 = this.map.latLngToContainerPoint([edge.to_lat, edge.to_lng]);
+                                        ctx.beginPath();
+                                        ctx.moveTo(p1.x, p1.y);
+                                        ctx.lineTo(p2.x, p2.y);
+                                        ctx.stroke();
+                                    }
+                                });
+
+                                ctx.setLineDash([]);
+                            }
+                        }
+                    }
+
+                    // Draw old sites as small gray dots
+                    oldSites.forEach(site => {
+                        const point = this.map.latLngToContainerPoint([site.lat, site.long]);
+
+                        // Skip if off-screen
+                        if (point.x < -50 || point.x > this.canvas.width + 50 ||
+                            point.y < -50 || point.y > this.canvas.height + 50) {
+                            return;
+                        }
+
+                        ctx.fillStyle = 'rgba(150, 150, 150, 0.4)';
+                        ctx.beginPath();
+                        ctx.arc(point.x, point.y, 3, 0, Math.PI * 2);
+                        ctx.fill();
+                    });
+                }
+
+                // Draw active sites
+                const visibleSites = this.getVisibleSites();
+
+                // Sort by recency (oldest first, so newest draws on top)
+                visibleSites.sort((a, b) => b.calBP - a.calBP);
+
+                visibleSites.forEach(site => {
+                    const point = this.map.latLngToContainerPoint([site.lat, site.long]);
+
+                    // Skip if off-screen
+                    if (point.x < -50 || point.x > this.canvas.width + 50 ||
+                        point.y < -50 || point.y > this.canvas.height + 50) {
+                        return;
+                    }
+
+                    this.drawSite(ctx, point.x, point.y, site);
+                });
+            }
+
+            drawSite(ctx, x, y, site) {
+                const color = economyColors[site.economy] || economyColors.other;
+                const radius = site.radius;
+                const opacity = site.opacity;
+
+                // Highlight if hovered
+                const isHovered = state.hoveredSite && state.hoveredSite.id === site.id;
+
+                // Outer glow for recent sites
+                if (site.recency > 0.5) {
+                    const glowRadius = radius + 1;
+                    const gradient = ctx.createRadialGradient(x, y, radius, x, y, glowRadius);
+                    gradient.addColorStop(0, `rgba(${color.r}, ${color.g}, ${color.b}, ${opacity * 0.5})`);
+                    gradient.addColorStop(1, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
+
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Main circle
+                ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${opacity * 0.85})`;
+                ctx.strokeStyle = isHovered ? '#000' : '#fff';
+                ctx.lineWidth = isHovered ? 2 : 0.5;
+
+                ctx.beginPath();
+                ctx.arc(x, y, isHovered ? radius * 1.5 : radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            }
+
+            getSiteAtPosition(x, y) {
+                const visibleSites = this.getVisibleSites();
+
+                // Check from newest to oldest (reverse rendering order)
+                for (let i = 0; i < visibleSites.length; i++) {
+                    const site = visibleSites[i];
+                    const point = this.map.latLngToContainerPoint([site.lat, site.long]);
+
+                    const dx = x - point.x;
+                    const dy = y - point.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance <= site.radius + 2) {
+                        return site;
+                    }
+                }
+
+                return null;
             }
         }
     </script>
