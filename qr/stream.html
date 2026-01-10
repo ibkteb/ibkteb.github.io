@@ -329,10 +329,6 @@
                 <button class="btn btn-danger hidden" id="stopSend">⏹ Stop</button>
             </div>
 
-            <div class="qr-display" id="qrDisplay">
-                <canvas id="qrCanvas"></canvas>
-            </div>
-
             <div class="progress-container">
                 <div class="stats">
                     <span>Packet: <strong id="currentPacket">0</strong> / <strong id="totalPackets">0</strong></span>
@@ -342,6 +338,14 @@
                 <div class="progress-bar">
                     <div class="progress-fill" id="sendProgress" style="width: 0%"></div>
                 </div>
+                <div class="nav-controls" style="display: flex; gap: 10px; margin-top: 10px; justify-content: center;">
+                    <button class="btn btn-secondary" id="prevPacket" style="padding: 8px 20px;">◀ Prev</button>
+                    <button class="btn btn-secondary" id="nextPacket" style="padding: 8px 20px;">Next ▶</button>
+                </div>
+            </div>
+
+            <div class="qr-display" id="qrDisplay">
+                <canvas id="qrCanvas"></canvas>
             </div>
         </div>
 
@@ -373,6 +377,11 @@
                 <div class="missing-display hidden" id="missingDisplay">
                     Missing packets: <span id="missingList"></span>
                 </div>
+
+                <div id="debugInfo"
+                    style="margin-top: 10px; font-size: 12px; color: #94a3b8; font-family: monospace; word-break: break-all;">
+                    Waiting for QR codes...
+                </div>
             </div>
 
             <div class="complete-message hidden" id="completeMessage">
@@ -390,7 +399,7 @@
 
     <script src="qr-encoder.js"></script>
     <script src="qr-stream.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="jsQR.min.js"></script>
     <script>
         // Tab switching
         document.querySelectorAll('.tab').forEach(tab => {
@@ -477,12 +486,15 @@
             // Adaptive scale: smaller chunks = smaller QR = can use larger scale
             const scaleMap = { 100: 8, 300: 7, 700: 6, 1200: 5, 1800: 4 };
             const scale = scaleMap[chunkSize] || 5;
+            currentScale = scale;
+            currentDisplayIndex = 0;
 
             sender.onPacket = (packet, seq, total) => {
                 // Generate QR for this packet
                 const qrData = QREncoder.generate(packet, document.getElementById('ecLevel').value);
                 QREncoder.renderToCanvas(qrData, qrCanvas, { scale, margin: 2 });
 
+                currentDisplayIndex = seq;
                 document.getElementById('currentPacket').textContent = seq + 1;
                 document.getElementById('sendProgress').style.width =
                     `${((seq + 1) / total) * 100}%`;
@@ -502,6 +514,39 @@
             startSendBtn.classList.remove('hidden');
             stopSendBtn.classList.add('hidden');
         }
+
+        // Manual packet navigation
+        let currentDisplayIndex = 0;
+        let currentScale = 5;
+
+        function displayPacket(index) {
+            if (!sender || index < 0 || index >= sender.totalPackets) return;
+            currentDisplayIndex = index;
+            const packet = sender.getPacket(index);
+            const qrData = QREncoder.generate(packet, document.getElementById('ecLevel').value);
+            QREncoder.renderToCanvas(qrData, qrCanvas, { scale: currentScale, margin: 2 });
+            document.getElementById('currentPacket').textContent = index + 1;
+            document.getElementById('sendProgress').style.width =
+                `${((index + 1) / sender.totalPackets) * 100}%`;
+        }
+
+        document.getElementById('prevPacket').addEventListener('click', () => {
+            if (sender && sender.isPlaying) {
+                sender.stop();
+                startSendBtn.classList.remove('hidden');
+                stopSendBtn.classList.add('hidden');
+            }
+            displayPacket(currentDisplayIndex - 1);
+        });
+
+        document.getElementById('nextPacket').addEventListener('click', () => {
+            if (sender && sender.isPlaying) {
+                sender.stop();
+                startSendBtn.classList.remove('hidden');
+                stopSendBtn.classList.add('hidden');
+            }
+            displayPacket(currentDisplayIndex + 1);
+        });
 
         // ===== RECEIVER =====
         const video = document.getElementById('video');
@@ -566,7 +611,16 @@
                 const code = jsQR(imageData.data, imageData.width, imageData.height);
 
                 if (code && code.data) {
-                    receiver.receive(code.data);
+                    console.log('QR detected, length:', code.data.length, 'first bytes:',
+                        code.data.substring(0, 20).split('').map(c => c.charCodeAt(0)));
+                    const result = receiver.receive(code.data);
+                    console.log('Receive result:', result);
+
+                    // Update debug display
+                    const debugEl = document.getElementById('debugInfo');
+                    if (debugEl) {
+                        debugEl.textContent = `Last scan: ${code.data.length} bytes, Result: ${JSON.stringify(result)}`;
+                    }
                 }
             }
 

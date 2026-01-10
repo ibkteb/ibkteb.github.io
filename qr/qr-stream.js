@@ -31,7 +31,7 @@ const QRStream = (() => {
         return crc;
     }
 
-    // Encode packet to binary string for QR
+    // Encode packet to Base64 string for QR (avoids UTF-8 encoding issues)
     function encodePacket(seq, total, flags, data) {
         const checksum = crc16(data);
         const packet = new Uint8Array(HEADER_SIZE + data.length);
@@ -58,36 +58,47 @@ const QRStream = (() => {
         // Data
         packet.set(data, HEADER_SIZE);
 
-        // Convert to binary string for QR encoding
-        return String.fromCharCode(...packet);
+        // Convert to Base64 string for safe QR encoding
+        let binary = '';
+        for (let i = 0; i < packet.length; i++) {
+            binary += String.fromCharCode(packet[i]);
+        }
+        return btoa(binary);
     }
 
-    // Decode packet from QR data
+    // Decode packet from Base64 QR data
     function decodePacket(str) {
-        if (str.length < HEADER_SIZE) return null;
+        try {
+            // Decode Base64 to binary string
+            const binary = atob(str);
+            if (binary.length < HEADER_SIZE) return null;
 
-        const data = new Uint8Array(str.length);
-        for (let i = 0; i < str.length; i++) {
-            data[i] = str.charCodeAt(i);
-        }
+            const data = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                data[i] = binary.charCodeAt(i);
+            }
 
-        // Check magic
-        if (data[0] !== MAGIC.charCodeAt(0) || data[1] !== MAGIC.charCodeAt(1)) {
+            // Check magic
+            if (data[0] !== MAGIC.charCodeAt(0) || data[1] !== MAGIC.charCodeAt(1)) {
+                return null;
+            }
+
+            const seq = (data[2] << 8) | data[3];
+            const total = (data[4] << 8) | data[5];
+            const flags = data[6];
+            const checksum = (data[7] << 8) | data[8];
+            const payload = data.slice(HEADER_SIZE);
+
+            // Verify checksum
+            if (crc16(payload) !== checksum) {
+                return { error: 'checksum', seq };
+            }
+
+            return { seq, total, flags, data: payload };
+        } catch (e) {
+            // Not valid Base64 or QR Stream packet
             return null;
         }
-
-        const seq = (data[2] << 8) | data[3];
-        const total = (data[4] << 8) | data[5];
-        const flags = data[6];
-        const checksum = (data[7] << 8) | data[8];
-        const payload = data.slice(HEADER_SIZE);
-
-        // Verify checksum
-        if (crc16(payload) !== checksum) {
-            return { error: 'checksum', seq };
-        }
-
-        return { seq, total, flags, data: payload };
     }
 
     /**
