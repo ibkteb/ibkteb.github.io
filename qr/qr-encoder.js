@@ -197,7 +197,10 @@ const QREncoder = (() => {
     };
 
     function getVersion(data, ecLevel) {
-        const len = data.length;
+        // Calculate actual UTF-8 byte length
+        const utf8Bytes = new TextEncoder().encode(data);
+        const len = utf8Bytes.length;
+
         for (let v = 1; v <= 40; v++) {
             const capacity = getDataCapacity(v, ecLevel);
             // Byte mode: 4 bits mode + 8/16 bits length + data + 4 bits terminator
@@ -213,18 +216,21 @@ const QREncoder = (() => {
         const capacity = getDataCapacity(version, ecLevel);
         const bits = [];
 
+        // Convert string to UTF-8 bytes
+        const utf8Bytes = new TextEncoder().encode(data);
+
         // Mode indicator (byte mode = 0100)
         bits.push(0, 1, 0, 0);
 
-        // Character count
+        // Character count (number of UTF-8 bytes)
         const countBits = version < 10 ? 8 : 16;
         for (let i = countBits - 1; i >= 0; i--) {
-            bits.push((data.length >> i) & 1);
+            bits.push((utf8Bytes.length >> i) & 1);
         }
 
-        // Data bytes
-        for (let i = 0; i < data.length; i++) {
-            const byte = data.charCodeAt(i) & 0xFF;
+        // Data bytes (UTF-8 encoded)
+        for (let i = 0; i < utf8Bytes.length; i++) {
+            const byte = utf8Bytes[i];
             for (let j = 7; j >= 0; j--) {
                 bits.push((byte >> j) & 1);
             }

@@ -1,417 +1,285 @@
 /**
  * Pure JavaScript QR Code Decoder
- * Detects and decodes QR codes from image data
+ * Optimized for decoding clean, generated QR codes
  */
 
 const QRDecoder = (() => {
-    // Galois Field for Reed-Solomon
-    const GF_EXP = new Array(512);
-    const GF_LOG = new Array(256);
-
-    (function initGF() {
-        let x = 1;
-        for (let i = 0; i < 255; i++) {
-            GF_EXP[i] = x;
-            GF_LOG[x] = i;
-            x <<= 1;
-            if (x & 0x100) x ^= 0x11d;
-        }
-        for (let i = 255; i < 512; i++) {
-            GF_EXP[i] = GF_EXP[i - 255];
-        }
-    })();
-
-    function gfMul(x, y) {
-        if (x === 0 || y === 0) return 0;
-        return GF_EXP[(GF_LOG[x] + GF_LOG[y]) % 255];
-    }
-
-    function gfDiv(x, y) {
-        if (y === 0) throw new Error('Division by zero');
-        if (x === 0) return 0;
-        return GF_EXP[(GF_LOG[x] - GF_LOG[y] + 255) % 255];
-    }
-
-    function gfPolyEval(p, x) {
-        let result = 0;
-        for (let i = 0; i < p.length; i++) {
-            result = gfMul(result, x) ^ p[i];
-        }
-        return result;
-    }
-
-    // Binarize image using adaptive threshold
     function binarize(imageData, width, height) {
-        const gray = new Uint8Array(width * height);
         const binary = new Uint8Array(width * height);
-
-        // Convert to grayscale
         for (let i = 0; i < width * height; i++) {
-            const r = imageData[i * 4];
-            const g = imageData[i * 4 + 1];
-            const b = imageData[i * 4 + 2];
-            gray[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+            const gray = 0.299 * imageData[i * 4] + 0.587 * imageData[i * 4 + 1] + 0.114 * imageData[i * 4 + 2];
+            binary[i] = gray < 128 ? 1 : 0;
         }
-
-        // Adaptive threshold with integral image
-        const blockSize = Math.max(3, Math.floor(Math.min(width, height) / 8) | 1);
-        const C = 7;
-
-        // Compute integral image
-        const integral = new Float64Array(width * height);
-        for (let y = 0; y < height; y++) {
-            let rowSum = 0;
-            for (let x = 0; x < width; x++) {
-                rowSum += gray[y * width + x];
-                integral[y * width + x] = rowSum + (y > 0 ? integral[(y - 1) * width + x] : 0);
-            }
-        }
-
-        const half = Math.floor(blockSize / 2);
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                const x1 = Math.max(0, x - half);
-                const y1 = Math.max(0, y - half);
-                const x2 = Math.min(width - 1, x + half);
-                const y2 = Math.min(height - 1, y + half);
-
-                const count = (x2 - x1 + 1) * (y2 - y1 + 1);
-                let sum = integral[y2 * width + x2];
-                if (x1 > 0) sum -= integral[y2 * width + (x1 - 1)];
-                if (y1 > 0) sum -= integral[(y1 - 1) * width + x2];
-                if (x1 > 0 && y1 > 0) sum += integral[(y1 - 1) * width + (x1 - 1)];
-
-                const threshold = sum / count - C;
-                binary[y * width + x] = gray[y * width + x] > threshold ? 0 : 1;
-            }
-        }
-
         return binary;
     }
 
-    // Find finder patterns
+    // Find the center of a finder pattern by exploring from a seed point
+    function refineCenter(binary, width, height, seedX, seedY) {
+        // Find the center of the inner 3x3 black square
+        // Start from seed and expand to find the bounds of the continuous black region
+
+        let x = Math.floor(seedX);
+        let y = Math.floor(seedY);
+
+        // Make sure we're on black
+        while (x > 0 && binary[y * width + x] === 0) x--;
+        while (x < width && binary[y * width + x] === 0) x++;
+        if (binary[y * width + x] === 0) return null;
+
+        // Find horizontal extent of center black region
+        let left = x, right = x;
+        while (left > 0 && binary[y * width + left - 1] === 1) left--;
+        while (right < width - 1 && binary[y * width + right + 1] === 1) right++;
+
+        // Find center X
+        const cx = (left + right) / 2;
+
+        // Find vertical extent at center X
+        let top = y, bottom = y;
+        const cxi = Math.floor(cx);
+        while (top > 0 && binary[(top - 1) * width + cxi] === 1) top--;
+        while (bottom < height - 1 && binary[(bottom + 1) * width + cxi] === 1) bottom++;
+
+        // Find center Y
+        const cy = (top + bottom) / 2;
+
+        // Estimate module size from the center black square (should be 3 modules)
+        const sizeX = (right - left + 1) / 3;
+        const sizeY = (bottom - top + 1) / 3;
+        const moduleSize = (sizeX + sizeY) / 2;
+
+        return { x: cx, y: cy, size: moduleSize };
+    }
+
     function findFinderPatterns(binary, width, height) {
-        const patterns = [];
+        const candidates = [];
 
-        function checkRatio(counts) {
-            const total = counts.reduce((a, b) => a + b, 0);
-            if (total < 7) return false;
-
-            const unit = total / 7;
-            const tolerance = unit * 0.5;
-
-            return Math.abs(counts[0] - unit) < tolerance &&
-                Math.abs(counts[1] - unit) < tolerance &&
-                Math.abs(counts[2] - 3 * unit) < tolerance * 3 &&
-                Math.abs(counts[3] - unit) < tolerance &&
-                Math.abs(counts[4] - unit) < tolerance;
-        }
-
-        function checkVertical(cx, cy, width, height, binary) {
-            const counts = [0, 0, 0, 0, 0];
-            let y = cy;
-
-            // Go up
-            while (y >= 0 && binary[y * width + cx] === 1) { counts[2]++; y--; }
-            while (y >= 0 && binary[y * width + cx] === 0) { counts[1]++; y--; }
-            while (y >= 0 && binary[y * width + cx] === 1) { counts[0]++; y--; }
-
-            // Go down
-            y = cy + 1;
-            while (y < height && binary[y * width + cx] === 1) { counts[2]++; y++; }
-            while (y < height && binary[y * width + cx] === 0) { counts[3]++; y++; }
-            while (y < height && binary[y * width + cx] === 1) { counts[4]++; y++; }
-
-            return checkRatio(counts);
-        }
-
+        // Scan for 1:1:3:1:1 patterns
         for (let y = 0; y < height; y++) {
+            let state = binary[y * width] === 1 ? 0 : -1;
             const counts = [0, 0, 0, 0, 0];
-            let currentState = 0;
 
             for (let x = 0; x < width; x++) {
                 const pixel = binary[y * width + x];
+                const expected = state % 2;
 
-                if (pixel === 1) { // Black
-                    if (currentState % 2 === 1) currentState++;
-                    counts[currentState]++;
-                } else { // White
-                    if (currentState % 2 === 0) {
-                        if (currentState === 4) {
-                            if (checkRatio(counts)) {
-                                const total = counts.reduce((a, b) => a + b, 0);
-                                const cx = x - total / 2;
+                if (state === -1) {
+                    if (pixel === 1) { state = 0; counts[0] = 1; }
+                } else if (pixel === expected) {
+                    counts[state]++;
+                } else {
+                    if (state === 4) {
+                        if (checkRatio(counts)) {
+                            const total = counts[0] + counts[1] + counts[2] + counts[3] + counts[4];
+                            // Rough center X from the pattern
+                            const roughX = x - counts[4] - counts[3] - counts[2] / 2;
 
-                                if (checkVertical(Math.floor(cx), y, width, height, binary)) {
-                                    // Found a finder pattern candidate
-                                    const existingIdx = patterns.findIndex(p =>
-                                        Math.abs(p.x - cx) < total && Math.abs(p.y - y) < total
-                                    );
-
-                                    if (existingIdx === -1) {
-                                        patterns.push({ x: cx, y, size: total / 7 });
-                                    }
-                                }
+                            // Refine the center
+                            const refined = refineCenter(binary, width, height, roughX, y);
+                            if (refined) {
+                                candidates.push({
+                                    x: refined.x,
+                                    y: refined.y,
+                                    size: refined.size,
+                                    width: total
+                                });
                             }
-                            counts[0] = counts[2];
-                            counts[1] = counts[3];
-                            counts[2] = counts[4];
-                            counts[3] = 1;
-                            counts[4] = 0;
-                            currentState = 3;
-                        } else {
-                            currentState++;
-                            counts[currentState]++;
                         }
+                        counts[0] = counts[2]; counts[1] = counts[3]; counts[2] = counts[4];
+                        counts[3] = 1; counts[4] = 0; state = 3;
                     } else {
-                        counts[currentState]++;
+                        state++;
+                        counts[state] = 1;
                     }
                 }
             }
         }
 
-        return patterns;
+        return clusterPatterns(candidates);
     }
 
-    // Order finder patterns: top-left, top-right, bottom-left
-    function orderFinderPatterns(patterns) {
-        if (patterns.length < 3) return null;
+    function checkRatio(c) {
+        const total = c[0] + c[1] + c[2] + c[3] + c[4];
+        if (total < 7) return false;
+        const unit = total / 7;
+        const tol = unit * 0.5;
+        return Math.abs(c[0] - unit) <= tol && Math.abs(c[1] - unit) <= tol &&
+            Math.abs(c[2] - 3 * unit) <= tol * 1.5 &&
+            Math.abs(c[3] - unit) <= tol && Math.abs(c[4] - unit) <= tol;
+    }
 
-        // Find the three closest patterns
-        let best = null;
-        let bestDist = Infinity;
-
-        for (let i = 0; i < patterns.length; i++) {
-            for (let j = i + 1; j < patterns.length; j++) {
-                for (let k = j + 1; k < patterns.length; k++) {
-                    const pts = [patterns[i], patterns[j], patterns[k]];
-                    const dists = [
-                        Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
-                        Math.hypot(pts[1].x - pts[2].x, pts[1].y - pts[2].y),
-                        Math.hypot(pts[0].x - pts[2].x, pts[0].y - pts[2].y)
-                    ];
-                    const maxDist = Math.max(...dists);
-                    const variance = dists.reduce((s, d) => s + (d - maxDist) ** 2, 0);
-
-                    if (maxDist < bestDist) {
-                        bestDist = maxDist;
-                        best = pts;
-                    }
+    function clusterPatterns(patterns) {
+        const clusters = [];
+        for (const p of patterns) {
+            let merged = false;
+            for (const c of clusters) {
+                const dist = Math.hypot(p.x - c.x, p.y - c.y);
+                if (dist < p.size * 3) {
+                    const total = c.n + 1;
+                    c.x = (c.x * c.n + p.x) / total;
+                    c.y = (c.y * c.n + p.y) / total;
+                    c.size = (c.size * c.n + p.size) / total;
+                    c.width = (c.width * c.n + p.width) / total;
+                    c.n = total;
+                    merged = true;
+                    break;
                 }
             }
+            if (!merged) clusters.push({ x: p.x, y: p.y, size: p.size, width: p.width, n: 1 });
         }
+        return clusters.filter(c => c.n >= 2).sort((a, b) => b.n - a.n);
+    }
 
-        if (!best) return null;
+    function orderPatterns(pts) {
+        if (pts.length < 3) return null;
+        const p = pts.slice(0, 3);
 
-        // Sort by distance to find top-left (corner opposite to hypotenuse)
-        const [a, b, c] = best;
-        const ab = Math.hypot(a.x - b.x, a.y - b.y);
-        const bc = Math.hypot(b.x - c.x, b.y - c.y);
-        const ac = Math.hypot(a.x - c.x, a.y - c.y);
+        // Sort by sum of coordinates (top-left has smallest sum)
+        p.sort((a, b) => (a.x + a.y) - (b.x + b.y));
+        const topLeft = p[0];
 
-        let topLeft, topRight, bottomLeft;
+        // Of remaining two, one with larger X is top-right
+        let topRight, bottomLeft;
+        if (p[1].x > p[2].x) { topRight = p[1]; bottomLeft = p[2]; }
+        else { topRight = p[2]; bottomLeft = p[1]; }
 
-        if (ab > bc && ab > ac) {
-            topLeft = c;
-            [topRight, bottomLeft] = a.x < b.x ? [b, a] : [a, b];
-        } else if (bc > ab && bc > ac) {
-            topLeft = a;
-            [topRight, bottomLeft] = b.x < c.x ? [c, b] : [b, c];
-        } else {
-            topLeft = b;
-            [topRight, bottomLeft] = a.x < c.x ? [c, a] : [a, c];
-        }
-
-        // Make sure bottomLeft is below topLeft
-        if (bottomLeft.y < topLeft.y) {
-            [topRight, bottomLeft] = [bottomLeft, topRight];
-        }
+        // Verify with cross product (should be positive)
+        const v1x = topRight.x - topLeft.x, v1y = topRight.y - topLeft.y;
+        const v2x = bottomLeft.x - topLeft.x, v2y = bottomLeft.y - topLeft.y;
+        if (v1x * v2y - v1y * v2x < 0) [topRight, bottomLeft] = [bottomLeft, topRight];
 
         return { topLeft, topRight, bottomLeft };
     }
 
-    // Sample the QR code matrix
-    function sampleGrid(binary, width, patterns, version) {
-        const size = version * 4 + 17;
+    function sampleGrid(binary, width, height, patterns, size) {
         const { topLeft, topRight, bottomLeft } = patterns;
+        const moduleCount = size - 7;
 
-        // Estimate bottom-right
-        const bottomRight = {
-            x: topRight.x + bottomLeft.x - topLeft.x,
-            y: topRight.y + bottomLeft.y - topLeft.y
-        };
+        // Vectors from top-left to top-right and bottom-left
+        const dxR = (topRight.x - topLeft.x) / moduleCount;
+        const dyR = (topRight.y - topLeft.y) / moduleCount;
+        const dxD = (bottomLeft.x - topLeft.x) / moduleCount;
+        const dyD = (bottomLeft.y - topLeft.y) / moduleCount;
 
-        // Create perspective transform
-        const moduleSize = Math.hypot(topRight.x - topLeft.x, topRight.y - topLeft.y) / (size - 7);
+        // Origin: finder center is at (3.5, 3.5), so (0,0) is 3.5 modules before it
+        const originX = topLeft.x - 3.5 * dxR - 3.5 * dxD;
+        const originY = topLeft.y - 3.5 * dyR - 3.5 * dyD;
 
         const matrix = [];
         for (let r = 0; r < size; r++) {
-            matrix.push(new Array(size).fill(0));
-        }
-
-        for (let r = 0; r < size; r++) {
+            const row = [];
             for (let c = 0; c < size; c++) {
-                // Bilinear interpolation
-                const tx = c / (size - 1);
-                const ty = r / (size - 1);
-
-                const top = {
-                    x: topLeft.x + tx * (topRight.x - topLeft.x),
-                    y: topLeft.y + tx * (topRight.y - topLeft.y)
-                };
-                const bottom = {
-                    x: bottomLeft.x + tx * (bottomRight.x - bottomLeft.x),
-                    y: bottomLeft.y + tx * (bottomRight.y - bottomLeft.y)
-                };
-
-                const px = Math.floor(top.x + ty * (bottom.x - top.x));
-                const py = Math.floor(top.y + ty * (bottom.y - top.y));
-
-                if (px >= 0 && px < width && py >= 0 && py < binary.length / width) {
-                    matrix[r][c] = binary[py * width + px];
-                }
+                const px = originX + (c + 0.5) * dxR + (r + 0.5) * dxD;
+                const py = originY + (c + 0.5) * dyR + (r + 0.5) * dyD;
+                const ix = Math.round(px), iy = Math.round(py);
+                row.push(ix >= 0 && ix < width && iy >= 0 && iy < height ? binary[iy * width + ix] : 0);
             }
+            matrix.push(row);
         }
-
         return matrix;
     }
 
-    // Read format information
-    function readFormatInfo(matrix, size) {
-        let format1 = 0;
-        let format2 = 0;
-
-        // Read from top-left corner
-        for (let i = 0; i <= 5; i++) {
-            format1 = (format1 << 1) | matrix[8][i];
-        }
-        format1 = (format1 << 1) | matrix[8][7];
-        format1 = (format1 << 1) | matrix[8][8];
-        format1 = (format1 << 1) | matrix[7][8];
-        for (let i = 5; i >= 0; i--) {
-            format1 = (format1 << 1) | matrix[i][8];
-        }
-
-        // XOR with mask pattern
-        format1 ^= 0x5412;
-
-        const ecLevelBits = (format1 >> 13) & 0x3;
-        const maskPattern = (format1 >> 10) & 0x7;
-
-        const ecLevels = ['M', 'L', 'H', 'Q'];
-
-        return {
-            ecLevel: ecLevels[ecLevelBits],
-            maskPattern
-        };
+    function readFormat(matrix) {
+        let bits = 0;
+        for (let c = 0; c <= 5; c++) bits = (bits << 1) | matrix[8][c];
+        bits = (bits << 1) | matrix[8][7];
+        bits = (bits << 1) | matrix[8][8];
+        bits = (bits << 1) | matrix[7][8];
+        for (let r = 5; r >= 0; r--) bits = (bits << 1) | matrix[r][8];
+        bits ^= 0x5412;
+        return { ec: ['M', 'L', 'H', 'Q'][(bits >> 13) & 3], mask: (bits >> 10) & 7 };
     }
 
-    // Apply mask pattern
-    function applyMask(matrix, size, mask) {
-        const maskFunctions = [
+    function isFunc(r, c, size, v) {
+        if (r < 9 && c < 9) return true;
+        if (r < 9 && c >= size - 8) return true;
+        if (r >= size - 8 && c < 9) return true;
+        if (r === 6 || c === 6) return true;
+        if (r === size - 8 && c === 8) return true;
+        if (v >= 7) {
+            if (r < 6 && c >= size - 11 && c < size - 8) return true;
+            if (c < 6 && r >= size - 11 && r < size - 8) return true;
+        }
+        if (v >= 2) {
+            const pos = getAlignPos(v, size);
+            for (const ar of pos) {
+                for (const ac of pos) {
+                    if ((ar === 6 && ac === 6) || (ar === 6 && ac === size - 7) || (ar === size - 7 && ac === 6)) continue;
+                    if (Math.abs(r - ar) <= 2 && Math.abs(c - ac) <= 2) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function getAlignPos(v, size) {
+        if (v === 1) return [];
+        const n = Math.floor(v / 7) + 2;
+        const first = 6, last = size - 7;
+        if (n === 2) return [first, last];
+        const step = Math.ceil((last - first) / (n - 1) / 2) * 2;
+        const pos = [first];
+        for (let i = 1; i < n - 1; i++) pos.push(last - (n - 1 - i) * step);
+        pos.push(last);
+        return pos;
+    }
+
+    function unmask(matrix, size, mask, v) {
+        const fns = [
             (r, c) => (r + c) % 2 === 0,
             (r, c) => r % 2 === 0,
             (r, c) => c % 3 === 0,
             (r, c) => (r + c) % 3 === 0,
             (r, c) => (Math.floor(r / 2) + Math.floor(c / 3)) % 2 === 0,
-            (r, c) => ((r * c) % 2) + ((r * c) % 3) === 0,
-            (r, c) => (((r * c) % 2) + ((r * c) % 3)) % 2 === 0,
-            (r, c) => (((r + c) % 2) + ((r * c) % 3)) % 2 === 0
+            (r, c) => ((r * c) % 2 + (r * c) % 3) === 0,
+            (r, c) => ((r * c) % 2 + (r * c) % 3) % 2 === 0,
+            (r, c) => ((r + c) % 2 + (r * c) % 3) % 2 === 0
         ];
-
-        const fn = maskFunctions[mask];
-        const result = matrix.map(row => [...row]);
-
-        for (let r = 0; r < size; r++) {
-            for (let c = 0; c < size; c++) {
-                if (!isReserved(r, c, size) && fn(r, c)) {
-                    result[r][c] ^= 1;
-                }
-            }
-        }
-
-        return result;
+        const fn = fns[mask];
+        return matrix.map((row, r) => row.map((val, c) => !isFunc(r, c, size, v) && fn(r, c) ? val ^ 1 : val));
     }
 
-    function isReserved(r, c, size) {
-        // Finder patterns + separators
-        if ((r < 9 && c < 9) || (r < 9 && c >= size - 8) || (r >= size - 8 && c < 9)) return true;
-        // Timing patterns
-        if (r === 6 || c === 6) return true;
-        return false;
-    }
-
-    // Extract data bits
-    function extractData(matrix, size) {
+    function extractBits(matrix, size, v) {
         const bits = [];
-        let upward = true;
-
-        for (let col = size - 1; col >= 0; col -= 2) {
+        let up = true;
+        for (let col = size - 1; col >= 1; col -= 2) {
             if (col === 6) col = 5;
-
-            for (let row = 0; row < size; row++) {
-                const actualRow = upward ? size - 1 - row : row;
-
-                for (let c = 0; c < 2; c++) {
-                    const actualCol = col - c;
-                    if (!isReserved(actualRow, actualCol, size)) {
-                        bits.push(matrix[actualRow][actualCol]);
-                    }
-                }
+            for (let i = 0; i < size; i++) {
+                const row = up ? size - 1 - i : i;
+                if (!isFunc(row, col, size, v)) bits.push(matrix[row][col]);
+                if (col > 0 && !isFunc(row, col - 1, size, v)) bits.push(matrix[row][col - 1]);
             }
-            upward = !upward;
+            up = !up;
         }
-
         return bits;
     }
 
-    // Decode the data
-    function decodeData(bits) {
-        let pos = 0;
+    function decodeBits(bits, v) {
+        let i = 0, result = '';
+        const read = n => { let val = 0; for (let j = 0; j < n && i < bits.length; j++) val = (val << 1) | bits[i++]; return val; };
 
-        function readBits(n) {
-            let val = 0;
-            for (let i = 0; i < n; i++) {
-                val = (val << 1) | (bits[pos++] || 0);
-            }
-            return val;
+        while (i < bits.length - 4) {
+            const mode = read(4);
+            if (mode === 0) break;
+
+            if (mode === 4) { // Byte
+                const count = read(v < 10 ? 8 : 16);
+                for (let j = 0; j < count; j++) { const b = read(8); if (b) result += String.fromCharCode(b); }
+            } else if (mode === 2) { // Alphanumeric
+                const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
+                const count = read(v < 10 ? 9 : v < 27 ? 11 : 13);
+                for (let j = 0; j < Math.floor(count / 2); j++) {
+                    const val = read(11);
+                    result += chars[Math.floor(val / 45)] + chars[val % 45];
+                }
+                if (count % 2) result += chars[read(6)];
+            } else if (mode === 1) { // Numeric
+                const count = read(v < 10 ? 10 : v < 27 ? 12 : 14);
+                for (let j = 0; j < Math.floor(count / 3); j++) result += String(read(10)).padStart(3, '0');
+                if (count % 3 === 2) result += String(read(7)).padStart(2, '0');
+                else if (count % 3 === 1) result += String(read(4));
+            } else break;
         }
-
-        const mode = readBits(4);
-
-        if (mode === 0) return ''; // Terminator
-
-        let result = '';
-
-        if (mode === 4) { // Byte mode
-            const count = readBits(8);
-            for (let i = 0; i < count; i++) {
-                result += String.fromCharCode(readBits(8));
-            }
-        } else if (mode === 2) { // Alphanumeric mode
-            const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
-            const count = readBits(9);
-            for (let i = 0; i < Math.floor(count / 2); i++) {
-                const val = readBits(11);
-                result += chars[Math.floor(val / 45)] + chars[val % 45];
-            }
-            if (count % 2 === 1) {
-                result += chars[readBits(6)];
-            }
-        } else if (mode === 1) { // Numeric mode
-            const count = readBits(10);
-            for (let i = 0; i < Math.floor(count / 3); i++) {
-                const val = readBits(10);
-                result += String(val).padStart(3, '0');
-            }
-            const rem = count % 3;
-            if (rem === 2) {
-                result += String(readBits(7)).padStart(2, '0');
-            } else if (rem === 1) {
-                result += String(readBits(4));
-            }
-        }
-
         return result;
     }
 
@@ -419,34 +287,27 @@ const QRDecoder = (() => {
         try {
             const binary = binarize(imageData, width, height);
             const patterns = findFinderPatterns(binary, width, height);
-
             if (patterns.length < 3) return null;
 
-            const ordered = orderFinderPatterns(patterns);
+            const ordered = orderPatterns(patterns);
             if (!ordered) return null;
 
-            // Estimate version from pattern distance
-            const dist = Math.hypot(
-                ordered.topRight.x - ordered.topLeft.x,
-                ordered.topRight.y - ordered.topLeft.y
-            );
-            const moduleSize = dist / 14; // Distance between finder pattern centers
-            const estimatedSize = Math.round(dist / moduleSize + 7);
-            const version = Math.round((estimatedSize - 17) / 4);
+            // Calculate version from distance between finder centers
+            const dist = Math.hypot(ordered.topRight.x - ordered.topLeft.x, ordered.topRight.y - ordered.topLeft.y);
+            const avgSize = (ordered.topLeft.size + ordered.topRight.size + ordered.bottomLeft.size) / 3;
 
-            if (version < 1 || version > 10) return null;
-
-            const matrix = sampleGrid(binary, width, ordered, version);
+            // Distance = (size - 7) * moduleSize, and size = version * 4 + 17
+            // So: version = ((dist / moduleSize) + 7 - 17) / 4 = (dist / moduleSize - 10) / 4
+            const estModules = dist / avgSize;
+            const version = Math.max(1, Math.min(40, Math.round((estModules - 10) / 4)));
             const size = version * 4 + 17;
 
-            const formatInfo = readFormatInfo(matrix, size);
-            const unmasked = applyMask(matrix, size, formatInfo.maskPattern);
-            const bits = extractData(unmasked, size);
-            const data = decodeData(bits);
-
-            return data || null;
+            const matrix = sampleGrid(binary, width, height, ordered, size);
+            const format = readFormat(matrix);
+            const unmasked = unmask(matrix, size, format.mask, version);
+            const bits = extractBits(unmasked, size, version);
+            return decodeBits(bits, version) || null;
         } catch (e) {
-            console.error('QR decode error:', e);
             return null;
         }
     }

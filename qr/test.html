@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Test Suite</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Consolas', 'Monaco', monospace;
+            background: #1a1a2e;
+            color: #fff;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 14px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        #runTests {
+            background: #00ff88;
+            color: #000;
+        }
+
+        #runStress {
+            background: #667eea;
+            color: #fff;
+        }
+
+        #stopTests {
+            background: #ff4757;
+            color: #fff;
+        }
+
+        .stats {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .stat-label {
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+
+        .passed .stat-value {
+            color: #00ff88;
+        }
+
+        .failed .stat-value {
+            color: #ff4757;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff88, #667eea);
+            transition: width 0.1s;
+        }
+
+        .results {
+            max-height: 500px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        .result {
+            padding: 8px 12px;
+            margin-bottom: 4px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+        }
+
+        .result.pass {
+            background: rgba(0, 255, 136, 0.1);
+        }
+
+        .result.fail {
+            background: rgba(255, 71, 87, 0.2);
+            border: 1px solid #ff4757;
+        }
+
+        .result .icon {
+            font-size: 16px;
+        }
+
+        .result .details {
+            flex: 1;
+            word-break: break-all;
+        }
+
+        .result .time {
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #testCanvas {
+            display: none;
+        }
+
+        .filter-buttons {
+            margin-bottom: 10px;
+        }
+
+        .filter-buttons button {
+            padding: 6px 12px;
+            font-size: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .filter-buttons button.active {
+            background: #667eea;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🧪 QR Code Test Suite</h1>
+
+    <div class="controls">
+        <button id="runTests">▶ Run Basic Tests</button>
+        <button id="runStress">⚡ Stress Test (1000)</button>
+        <button id="stopTests" disabled>⏹ Stop</button>
+        <select id="ecLevel">
+            <option value="L">Error Level L (7%)</option>
+            <option value="M" selected>Error Level M (15%)</option>
+            <option value="Q">Error Level Q (25%)</option>
+            <option value="H">Error Level H (30%)</option>
+        </select>
+    </div>
+
+    <div class="stats">
+        <div class="stat">
+            <div class="stat-value" id="totalCount">0</div>
+            <div class="stat-label">Total Tests</div>
+        </div>
+        <div class="stat passed">
+            <div class="stat-value" id="passCount">0</div>
+            <div class="stat-label">Passed</div>
+        </div>
+        <div class="stat failed">
+            <div class="stat-value" id="failCount">0</div>
+            <div class="stat-label">Failed</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="avgTime">0ms</div>
+            <div class="stat-label">Avg Time</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="passRate">-</div>
+            <div class="stat-label">Pass Rate</div>
+        </div>
+    </div>
+
+    <div class="progress-bar">
+        <div class="progress-fill" id="progress" style="width: 0%"></div>
+    </div>
+
+    <div class="filter-buttons">
+        <button class="active" data-filter="all">All</button>
+        <button data-filter="pass">Passed</button>
+        <button data-filter="fail">Failed</button>
+    </div>
+
+    <div class="results" id="results"></div>
+
+    <canvas id="testCanvas"></canvas>
+
+    <script src="qr-encoder.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script>
+        const canvas = document.getElementById('testCanvas');
+        const ctx = canvas.getContext('2d');
+        const resultsDiv = document.getElementById('results');
+
+        let stats = { total: 0, passed: 0, failed: 0, totalTime: 0 };
+        let isRunning = false;
+        let shouldStop = false;
+        let currentFilter = 'all';
+
+        // Test case generators
+        const testGenerators = {
+            // Fixed test cases
+            basic: () => [
+                'Hello',
+                'Hello World',
+                'https://example.com',
+                '12345',
+                'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+                'Special: !@#$%^&*()_+-=[]{}|;:,.<>?',
+                'Unicode: café, naïve, résumé',
+                '日本語テスト',
+                '中文测试',
+                'Mixed: Hello 世界 123 !@#',
+                ' ', // Single space
+                'a', // Single char
+                'ab', // Two chars
+                'The quick brown fox jumps over the lazy dog',
+            ],
+
+            // Random alphanumeric strings
+            randomAlphanumeric: (count, minLen = 1, maxLen = 100) => {
+                const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+                const tests = [];
+                for (let i = 0; i < count; i++) {
+                    const len = Math.floor(Math.random() * (maxLen - minLen + 1)) + minLen;
+                    let str = '';
+                    for (let j = 0; j < len; j++) {
+                        str += chars[Math.floor(Math.random() * chars.length)];
+                    }
+                    tests.push(str);
+                }
+                return tests;
+            },
+
+            // Random ASCII strings including special chars
+            randomASCII: (count, minLen = 1, maxLen = 50) => {
+                const tests = [];
+                for (let i = 0; i < count; i++) {
+                    const len = Math.floor(Math.random() * (maxLen - minLen + 1)) + minLen;
+                    let str = '';
+                    for (let j = 0; j < len; j++) {
+                        str += String.fromCharCode(32 + Math.floor(Math.random() * 95));
+                    }
+                    tests.push(str);
+                }
+                return tests;
+            },
+
+            // URLs
+            randomURLs: (count) => {
+                const domains = ['example.com', 'test.org', 'demo.net', 'sample.io'];
+                const paths = ['', '/page', '/api/v1', '/user/123', '/search?q=test'];
+                const tests = [];
+                for (let i = 0; i < count; i++) {
+                    const protocol = Math.random() > 0.5 ? 'https://' : 'http://';
+                    const domain = domains[Math.floor(Math.random() * domains.length)];
+                    const path = paths[Math.floor(Math.random() * paths.length)];
+                    tests.push(protocol + domain + path);
+                }
+                return tests;
+            },
+
+            // Numeric strings
+            randomNumeric: (count, minLen = 1, maxLen = 30) => {
+                const tests = [];
+                for (let i = 0; i < count; i++) {
+                    const len = Math.floor(Math.random() * (maxLen - minLen + 1)) + minLen;
+                    let str = '';
+                    for (let j = 0; j < len; j++) {
+                        str += Math.floor(Math.random() * 10);
+                    }
+                    tests.push(str);
+                }
+                return tests;
+            },
+
+            // Edge cases - specific lengths targeting version boundaries
+            versionBoundaries: () => {
+                const tests = [];
+                // Test near version boundaries (Version 1-10 capacity transitions)
+                const boundaries = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 150, 200];
+                for (const len of boundaries) {
+                    tests.push('A'.repeat(len));
+                    tests.push('X'.repeat(len - 1) + 'Y');
+                }
+                return tests;
+            },
+
+            // Long strings
+            longStrings: () => {
+                const tests = [];
+                for (let len = 100; len <= 500; len += 50) {
+                    tests.push('L'.repeat(len));
+                }
+                return tests;
+            }
+        };
+
+        function encodeAndDecode(text, ecLevel) {
+            const start = performance.now();
+
+            try {
+                // Encode to QR
+                const qrData = QREncoder.generate(text, ecLevel);
+
+                // Render to canvas (larger scale for better decoding)
+                const scale = 4;
+                QREncoder.renderToCanvas(qrData, canvas, { scale, margin: 4 });
+
+                // Get image data
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                // Decode using jsQR
+                const code = jsQR(imageData.data, canvas.width, canvas.height);
+                const decoded = code ? code.data : null;
+
+                const elapsed = performance.now() - start;
+
+                return {
+                    success: decoded === text,
+                    decoded,
+                    expected: text,
+                    time: elapsed,
+                    version: qrData.size
+                };
+            } catch (error) {
+                return {
+                    success: false,
+                    decoded: null,
+                    expected: text,
+                    error: error.message,
+                    time: performance.now() - start
+                };
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('totalCount').textContent = stats.total;
+            document.getElementById('passCount').textContent = stats.passed;
+            document.getElementById('failCount').textContent = stats.failed;
+            document.getElementById('avgTime').textContent =
+                stats.total > 0 ? (stats.totalTime / stats.total).toFixed(1) + 'ms' : '0ms';
+            document.getElementById('passRate').textContent =
+                stats.total > 0 ? (stats.passed / stats.total * 100).toFixed(1) + '%' : '-';
+        }
+
+        function addResult(result) {
+            stats.total++;
+            stats.totalTime += result.time;
+            if (result.success) {
+                stats.passed++;
+            } else {
+                stats.failed++;
+            }
+            updateStats();
+
+            const div = document.createElement('div');
+            div.className = `result ${result.success ? 'pass' : 'fail'}`;
+            div.dataset.type = result.success ? 'pass' : 'fail';
+
+            const truncate = (s, len = 50) => s && s.length > len ? s.slice(0, len) + '...' : s;
+
+            div.innerHTML = `
+                <span class="icon">${result.success ? '✅' : '❌'}</span>
+                <span class="details">
+                    <strong>${result.success ? 'PASS' : 'FAIL'}</strong>
+                    ${result.error ? `<br>Error: ${result.error}` : ''}
+                    ${!result.success && !result.error ? `<br>Expected: "${truncate(result.expected)}"<br>Got: "${truncate(result.decoded)}"` : ''}
+                    ${result.success ? ` - "${truncate(result.expected)}" (${result.expected.length} chars)` : ''}
+                </span>
+                <span class="time">${result.time.toFixed(1)}ms</span>
+            `;
+
+            // Apply current filter
+            if (currentFilter !== 'all' && div.dataset.type !== currentFilter) {
+                div.style.display = 'none';
+            }
+
+            resultsDiv.insertBefore(div, resultsDiv.firstChild);
+        }
+
+        function setProgress(current, total) {
+            document.getElementById('progress').style.width = `${(current / total) * 100}%`;
+        }
+
+        async function runTests(testCases) {
+            const ecLevel = document.getElementById('ecLevel').value;
+            isRunning = true;
+            shouldStop = false;
+
+            document.getElementById('runTests').disabled = true;
+            document.getElementById('runStress').disabled = true;
+            document.getElementById('stopTests').disabled = false;
+
+            for (let i = 0; i < testCases.length; i++) {
+                if (shouldStop) break;
+
+                const result = encodeAndDecode(testCases[i], ecLevel);
+                addResult(result);
+                setProgress(i + 1, testCases.length);
+
+                // Yield to UI
+                await new Promise(r => setTimeout(r, 0));
+            }
+
+            isRunning = false;
+            document.getElementById('runTests').disabled = false;
+            document.getElementById('runStress').disabled = false;
+            document.getElementById('stopTests').disabled = true;
+        }
+
+        function reset() {
+            stats = { total: 0, passed: 0, failed: 0, totalTime: 0 };
+            resultsDiv.innerHTML = '';
+            updateStats();
+            setProgress(0, 1);
+        }
+
+        // Event listeners
+        document.getElementById('runTests').addEventListener('click', () => {
+            reset();
+            const testCases = [
+                ...testGenerators.basic(),
+                ...testGenerators.randomAlphanumeric(20, 1, 50),
+                ...testGenerators.randomURLs(10),
+                ...testGenerators.randomNumeric(10),
+                ...testGenerators.versionBoundaries()
+            ];
+            runTests(testCases);
+        });
+
+        document.getElementById('runStress').addEventListener('click', () => {
+            reset();
+            const testCases = [
+                ...testGenerators.basic(),
+                ...testGenerators.randomAlphanumeric(300, 1, 100),
+                ...testGenerators.randomASCII(200, 1, 50),
+                ...testGenerators.randomURLs(100),
+                ...testGenerators.randomNumeric(100),
+                ...testGenerators.versionBoundaries(),
+                ...testGenerators.longStrings()
+            ];
+            runTests(testCases);
+        });
+
+        document.getElementById('stopTests').addEventListener('click', () => {
+            shouldStop = true;
+        });
+
+        // Filter buttons
+        document.querySelectorAll('.filter-buttons button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-buttons button').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.dataset.filter;
+
+                document.querySelectorAll('.result').forEach(r => {
+                    if (currentFilter === 'all' || r.dataset.type === currentFilter) {
+                        r.style.display = '';
+                    } else {
+                        r.style.display = 'none';
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>

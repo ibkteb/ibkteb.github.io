@@ -69,12 +69,14 @@ function scan() {
 
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-        // Use custom QR decoder
-        const data = QRDecoder.decode(imageData.data, imageData.width, imageData.height);
+        // Use jsQR library for reliable decoding
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'dontInvert'
+        });
 
-        if (data && data !== lastResult) {
-            lastResult = data;
-            displayResult(data);
+        if (code && code.data && code.data !== lastResult) {
+            lastResult = code.data;
+            displayResult(code.data);
         }
     }
 
