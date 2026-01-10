@@ -610,17 +610,21 @@
                 const imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
                 const code = jsQR(imageData.data, imageData.width, imageData.height);
 
+                // Update debug display
+                const debugEl = document.getElementById('debugInfo');
+                scanCount = (scanCount || 0) + 1;
+
                 if (code && code.data) {
-                    console.log('QR detected, length:', code.data.length, 'first bytes:',
-                        code.data.substring(0, 20).split('').map(c => c.charCodeAt(0)));
+                    console.log('QR detected, data:', code.data.substring(0, 50));
                     const result = receiver.receive(code.data);
                     console.log('Receive result:', result);
-
-                    // Update debug display
-                    const debugEl = document.getElementById('debugInfo');
                     if (debugEl) {
-                        debugEl.textContent = `Last scan: ${code.data.length} bytes, Result: ${JSON.stringify(result)}`;
+                        debugEl.textContent = `Scan #${scanCount}: FOUND! ${code.data.length} chars, Result: ${JSON.stringify(result)}`;
+                        debugEl.style.color = result.accepted ? '#00ff88' : '#ff4757';
                     }
+                } else if (debugEl) {
+                    debugEl.textContent = `Scan #${scanCount}: No QR detected (${scanCanvas.width}x${scanCanvas.height})`;
+                    debugEl.style.color = '#94a3b8';
                 }
             }
 
